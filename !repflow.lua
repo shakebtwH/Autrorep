@@ -10,7 +10,7 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.14"
+local scriptver = "4.12 | Premium"
 
 ---------------------------
 -- AUTO UPDATE SYSTEM
@@ -22,78 +22,62 @@ local UPDATE_PREFIX = "[RepFlow Update]: "
 local GITHUB_VERSION_URL = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/version.txt"
 local GITHUB_SCRIPT_URL  = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/%21repflow.lua"
 
--- Получаем текущую версию скрипта
 local function getCurrentVersionNumber()
     local version = scriptver:match("(%d+%.%d+)")
     return tonumber(version) or 0
 end
 
--- Убираем пробелы и переносы
 local function trim(s)
-    if s then
-        return s:match("^%s*(.-)%s*$")
-    end
+    if s then return s:match("^%s*(.-)%s*$") end
     return s
 end
 
 local function checkForUpdate(manual)
     if not AUTO_UPDATE then return end
-
     sampAddChatMessage(UPDATE_PREFIX .. "Проверка обновлений...", -1)
 
-    -- Обходим кэш GitHub
-    local url = GITHUB_VERSION_URL .. "?rnd=" .. math.random(100000)
-
-    downloadUrlToFile(url, getWorkingDirectory().."\\repflow_version.txt", function(id, status)
-        if status == 0 then  -- 0 = загрузка завершена
+    downloadUrlToFile(GITHUB_VERSION_URL .. "?rnd=" .. math.random(100000), getWorkingDirectory().."\\repflow_version.txt", function(id, status)
+        if status == 0 then
             local f = io.open(getWorkingDirectory().."\\repflow_version.txt", "r")
-            if not f then 
-                sampAddChatMessage(UPDATE_PREFIX .. "Ошибка чтения version.txt", -1)
-                return 
+            if not f then
+                sampAddChatMessage(UPDATE_PREFIX .. "Не удалось прочитать version.txt", -1)
+                return
             end
-
-            local text = f:read("*a")
+            local remoteVersion = tonumber(trim(f:read("*a")))
             f:close()
             os.remove(getWorkingDirectory().."\\repflow_version.txt")
 
-            local remoteVersion = tonumber(trim(text))
+            if not remoteVersion then
+                sampAddChatMessage(UPDATE_PREFIX .. "Неверный формат версии на сервере", -1)
+                return
+            end
+
             local currentVersion = getCurrentVersionNumber()
-
-            -- Показываем для отладки
-            sampAddChatMessage(UPDATE_PREFIX .. "Current version: " .. tostring(currentVersion), -1)
-            sampAddChatMessage(UPDATE_PREFIX .. "Remote version: " .. tostring(remoteVersion), -1)
-
-            if remoteVersion and remoteVersion > currentVersion then
+            if remoteVersion > currentVersion then
                 sampAddChatMessage(UPDATE_PREFIX .. string.format("Доступно обновление! %.2f -> %.2f", currentVersion, remoteVersion), -1)
 
-                local newFilePath = thisScript().path .. ".new"
-                downloadUrlToFile(GITHUB_SCRIPT_URL .. "?rnd=" .. math.random(100000), newFilePath, function(id2, status2)
+                downloadUrlToFile(GITHUB_SCRIPT_URL .. "?rnd=" .. math.random(100000), thisScript().path..".new", function(id2, status2)
                     if status2 == 0 then
-                        local newFile = io.open(newFilePath, "r")
+                        local newFile = io.open(thisScript().path..".new","r")
                         if newFile then
                             local size = newFile:seek("end")
                             newFile:close()
-
                             if size and size > 1000 then
-                                lua_thread.create(function()
-                                    wait(500)
-                                    local oldPath = thisScript().path
-                                    os.remove(oldPath)
-                                    os.rename(newFilePath, oldPath)
-                                    sampAddChatMessage(UPDATE_PREFIX .. "Скрипт обновлён! Перезапуск...", -1)
-                                    wait(500)
-                                    thisScript():reload()
-                                end)
+                                os.remove(thisScript().path)
+                                os.rename(thisScript().path..".new", thisScript().path)
+                                sampAddChatMessage(UPDATE_PREFIX .. "Скрипт обновлён! Перезапуск...", -1)
+                                wait(1000)
+                                thisScript():reload()
                             else
-                                sampAddChatMessage(UPDATE_PREFIX .. "Ошибка: файл повреждён.", -1)
-                                os.remove(newFilePath)
+                                sampAddChatMessage(UPDATE_PREFIX .. "Ошибка: файл повреждён", -1)
+                                os.remove(thisScript().path..".new")
                             end
                         end
                     end
                 end)
             else
                 if manual then
-                    sampAddChatMessage(UPDATE_PREFIX .. "У вас последняя версия.", -1)
+                    sampAddChatMessage(UPDATE_PREFIX .. "У вас последняя версия", -1)
                 end
             end
         end
@@ -890,4 +874,3 @@ end)
 
 function showInfoWindow() info_window_state[0] = true end
 function showInfoWindowOff() info_window_state[0] = false end
-
