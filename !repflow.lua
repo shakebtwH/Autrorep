@@ -12,7 +12,7 @@ u8 = encoding.UTF8
 
 -- === НАСТРОЙКИ ОБНОВЛЕНИЯ (ВСТАВЬ СВОИ RAW ССЫЛКИ) ===
 local UPDATE_URL = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/update.json"
-local SCRIPT_URL = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/!repflow.lua"
+local SCRIPT_URL = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/%21repflow.lua"
 local update_found = false
 local update_status = u8"Проверка не проводилась"
 -- ====================================================
@@ -21,24 +21,23 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.15 | Premium"
+local scriptver = "4.11 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.12 | Premium", description = u8"- Добавлена функция автообновления через Github. теперь все обновления будут автоматические." },
-    { version = "4.11 | Premium", description = u8"- Убраны строки 'Время работы' и 'Ваш ник' во вкладке 'Информация'." },
-    { version = "4.10 | Premium", description = u8"- Убрана полоса прокрутки в окне информации, увеличен размер окна." },
-    { version = "4.9 | Premium", description = u8"- В окне информации при включённой ловле теперь показывается только статус, время работы текущей сессии и счётчик отвеченных репортов." },
-    { version = "4.8 | Premium", description = u8"- Исправлена ошибка с корутинами (добавлены защитные проверки)." },
-    { version = "4.7 | Premium", description = u8"- Финальная стабильная версия без фона и лишних зависимостей." },
-    { version = "4.6 | Premium", description = u8"- Добавлена возможность установить своё изображение на задний фон главного окна." },
-    { version = "4.5 | Premium", description = u8"- Исправлен краш при открытии меню (убрана загрузка внешнего шрифта)." },
-    { version = "4.4 | Premium", description = u8"- Добавлена поддержка локального шрифта с эмодзи (NotoColorEmoji.ttf)." },
-    { version = "4.3 | Premium", description = u8"- Добавлена поддержка эмодзи через системные шрифты." },
-    { version = "4.2 | Premium", description = u8"- Удалена вкладка 'Статистика', скрипт приведён к минималистичному виду." },
-    { version = "4.1 | Premium", description = u8"- Удалены статические темы, оставлены только 'Прозрачная' и 'Кастомная'.\n- Исправлена ошибка с PlotHistogram." },
-    { version = "4.0 | Premium", description = u8"- Удалено приветствие.\n- Добавлена вкладка 'Статистика'." },
+    { version = "4.11 | Premium", description = "- Убраны строки 'Время работы' и 'Ваш ник' во вкладке 'Информация'." },
+    { version = "4.10 | Premium", description = "- Убрана полоса прокрутки в окне информации, увеличен размер окна." },
+    { version = "4.9 | Premium", description = "- В окне информации при включённой ловле теперь показывается только статус, время работы текущей сессии и счётчик отвеченных репортов." },
+    { version = "4.8 | Premium", description = "- Исправлена ошибка с корутинами (добавлены защитные проверки)." },
+    { version = "4.7 | Premium", description = "- Финальная стабильная версия без фона и лишних зависимостей." },
+    { version = "4.6 | Premium", description = "- Добавлена возможность установить своё изображение на задний фон главного окна." },
+    { version = "4.5 | Premium", description = "- Исправлен краш при открытии меню (убрана загрузка внешнего шрифта)." },
+    { version = "4.4 | Premium", description = "- Добавлена поддержка локального шрифта с эмодзи (NotoColorEmoji.ttf)." },
+    { version = "4.3 | Premium", description = "- Добавлена поддержка эмодзи через системные шрифты." },
+    { version = "4.2 | Premium", description = "- Удалена вкладка 'Статистика', скрипт приведён к минималистичному виду." },
+    { version = "4.1 | Premium", description = "- Удалены статические темы, оставлены только 'Прозрачная' и 'Кастомная'.\n- Исправлена ошибка с PlotHistogram." },
+    { version = "4.0 | Premium", description = "- Удалено приветствие.\n- Добавлена вкладка 'Статистика'." },
 }
 
 local keyBind = 0x5A
@@ -65,8 +64,12 @@ local afkExitTime = 0
 local afkCooldown = 30
 local disableAutoStartOnToggle = false
 local changingKey = false
+
 local isDraggingInfo = false
 local dragOffsetX, dragOffsetY = 0, 0
+
+encoding.default = 'CP1251'
+u8 = encoding.UTF8
 
 local lastDialogTime = os.clock()
 local dialogTimeoutBuffer = imgui.new.char[5](tostring(dialogTimeout[0]))
@@ -74,6 +77,8 @@ local manualDisable = false
 local autoStartEnabled = new.bool(true)
 local dialogHandlerEnabled = new.bool(true)
 local hideFloodMsg = new.bool(true)
+
+local my_nick_cp1251 = "Игрок"
 local my_nick_utf8 = u8"Игрок"
 
 -- ФУНКЦИИ ОБНОВЛЕНИЯ
@@ -129,7 +134,6 @@ local function getPlayerName()
     if name and name ~= "" then my_nick_utf8 = u8(name) end
 end
 
--- КОНФИГ И ЦВЕТА
 local ini = inicfg.load({
     main = {
         keyBind = "0x5A", keyBindName = 'Z', otInterval = 10, useMilliseconds = false,
@@ -150,24 +154,33 @@ otInterval[0] = tonumber(ini.main.otInterval)
 useMilliseconds[0] = ini.main.useMilliseconds
 dialogTimeout[0] = tonumber(ini.main.dialogTimeout)
 dialogHandlerEnabled[0] = ini.main.dialogHandlerEnabled
-autoStartEnabled[0] = ini.main.autoStartEnabled
+autoStartEnabled[0] = ini.main.autoStartEnabled or false
 hideFloodMsg[0] = ini.main.otklflud
-local transparency = new.float(ini.main.transparency or 0.8)
-local currentTheme = new.int(tonumber(ini.main.theme) or 0)
 
-local customLeft = new.float[4](ini.main.customLeftR, ini.main.customLeftG, ini.main.customLeftB, ini.main.customLeftA)
-local customRight = new.float[4](ini.main.customRightR, ini.main.customRightG, ini.main.customRightB, ini.main.customRightA)
-local customChild = new.float[4](ini.main.customChildR, ini.main.customChildG, ini.main.customChildB, ini.main.customChildA)
-local customHover = new.float[4](ini.main.customHoverR, ini.main.customHoverG, ini.main.customHoverB, ini.main.customHoverA)
+local themeValue = tonumber(ini.main.theme)
+if themeValue == nil or themeValue < 0 or themeValue > 1 then
+    themeValue = 0
+    ini.main.theme = 0
+    inicfg.save(ini, IniFilename)
+end
+local currentTheme = new.int(themeValue)
+
+local transparency = new.float(ini.main.transparency or 0.8)
+
+local customLeft   = new.float[4](tonumber(ini.main.customLeftR)   or 27/255, tonumber(ini.main.customLeftG)   or 20/255, tonumber(ini.main.customLeftB)   or 30/255, tonumber(ini.main.customLeftA)   or 1)
+local customRight  = new.float[4](tonumber(ini.main.customRightR)  or 24/255, tonumber(ini.main.customRightG)  or 18/255, tonumber(ini.main.customRightB)  or 28/255, tonumber(ini.main.customRightA)  or 1)
+local customChild  = new.float[4](tonumber(ini.main.customChildR)  or 18/255, tonumber(ini.main.customChildG)  or 13/255, tonumber(ini.main.customChildB)  or 22/255, tonumber(ini.main.customChildA)  or 1)
+local customHover  = new.float[4](tonumber(ini.main.customHoverR)  or 63/255, tonumber(ini.main.customHoverG)  or 59/255, tonumber(ini.main.customHoverB)  or 66/255, tonumber(ini.main.customHoverA)  or 1)
 
 local colors = {}
-function applyTheme(themeIndex)
+local function applyTheme(themeIndex)
     if themeIndex == 0 then
         colors = {
             leftPanelColor = imgui.ImVec4(27/255,20/255,30/255,transparency[0]),
             rightPanelColor = imgui.ImVec4(24/255,18/255,28/255,transparency[0]),
             childPanelColor = imgui.ImVec4(18/255,13/255,22/255,transparency[0]),
             hoverColor = imgui.ImVec4(63/255,59/255,66/255,transparency[0]),
+            textColor = imgui.ImVec4(1,1,1,1),
         }
     else
         colors = {
@@ -175,51 +188,103 @@ function applyTheme(themeIndex)
             rightPanelColor = imgui.ImVec4(customRight[0], customRight[1], customRight[2], customRight[3]),
             childPanelColor = imgui.ImVec4(customChild[0], customChild[1], customChild[2], customChild[3]),
             hoverColor = imgui.ImVec4(customHover[0], customHover[1], customHover[2], customHover[3]),
+            textColor = imgui.ImVec4(1,1,1,1),
         }
     end
 end
 applyTheme(currentTheme[0])
 
--- ОСНОВНАЯ ЛОГИКА
+local lastWindowSize = nil
+
+local function formatTime(seconds)
+    local h = math.floor(seconds / 3600)
+    local m = math.floor((seconds % 3600) / 60)
+    local s = math.floor(seconds % 60)
+    return string.format("%02d:%02d:%02d", h, m, s)
+end
+
+local function emoji(name) return "" end
+
 function main()
     if not isSampLoaded() or not isSampfuncsLoaded() then return end
     while not isSampAvailable() do wait(100) end
-    
-    sampRegisterChatCommand("arep", function() main_window_state[0] = not main_window_state[0] end)
-    getPlayerName()
-    checkUpdates() -- Проверка обновлений при запуске
+    sampRegisterChatCommand("arep", cmd_arep)
 
-    sampAddChatMessage(tag .. 'Скрипт {00FF00}загружен.{FFFFFF} Меню: {00FF00}/arep', -1)
+    getPlayerName()
+    sampAddChatMessage(tag .. 'Скрипт {00FF00}загружен.{FFFFFF} Активация меню: {00FF00}/arep', -1)
+    show_arz_notify('success', 'RepFlow', 'Скрипт загружен. Активация: /arep', 3000)
+
+    local prev_main_state = false
 
     while true do
         wait(0)
-        
-        if isPauseMenuActive() then
-            if not gameMinimized then
-                wasActiveBeforePause = active
-                active = false
-                gameMinimized = true
-            end
-        elseif gameMinimized then
-            gameMinimized = false
-        end
 
-        if autoStartEnabled[0] and not active and not gameMinimized then
-            if (os.clock() - lastDialogTime) > dialogTimeout[0] then
-                active = true
-            end
-        end
+        checkPauseAndDisableAutoStart()
+        checkAutoStart()
 
-        if main_window_state[0] then
+        if main_window_state[0] and not isGameMinimized then
             imgui.Process = true
-            sampToggleCursor(true)
         else
             imgui.Process = false
         end
 
-        if not changingKey and isKeyJustPressed(keyBind) and not sampIsChatInputActive() and not sampIsDialogActive() then
-            active = not active
-            show_arz_notify('info', 'RepFlow', active and 'Ловля ВКЛ' or 'Ловля ВЫКЛ', 2000)
+        if main_window_state[0] ~= prev_main_state then
+            if main_window_state[0] then
+                sampToggleCursor(true)
+            else
+                sampToggleCursor(false)
+                resetIO()
+            end
+            prev_main_state = main_window_state[0]
+        end
+
+        if MoveWidget then
+            local cursorX, cursorY = getCursorPos()
+            ini.widget.posX = cursorX
+            ini.widget.posY = cursorY
+            if isKeyJustPressed(0x20) then
+                MoveWidget = false
+                sampToggleCursor(false)
+                saveWindowSettings()
+            end
+        end
+
+        if active or MoveWidget then
+            showInfoWindow()
+        else
+            showInfoWindowOff()
+        end
+
+        if not changingKey and isKeyJustPressed(keyBind) and not isSampfuncsConsoleActive() and not sampIsChatInputActive() and not sampIsDialogActive() and not isPauseMenuActive() then
+            onToggleActive()
+        end
+
+        if info_window_state[0] and not MoveWidget then
+            local altPressed = isKeyDown(vkeys.VK_MENU)
+            local mousePressed = imgui.GetIO().MouseDown[0]
+            local mouseX, mouseY = getCursorPos()
+
+            if altPressed and mousePressed and not isDraggingInfo then
+                local winX, winY = ini.widget.posX, ini.widget.posY
+                local winW, winH = 240, active and 120 or 280
+                if mouseX >= winX and mouseX <= winX + winW and mouseY >= winY and mouseY <= winY + 30 then
+                    isDraggingInfo = true
+                    dragOffsetX = mouseX - winX
+                    dragOffsetY = mouseY - winY
+                end
+            end
+
+            if isDraggingInfo then
+                if mousePressed then
+                    ini.widget.posX = mouseX - dragOffsetX
+                    ini.widget.posY = mouseY - dragOffsetY
+                else
+                    isDraggingInfo = false
+                    inicfg.save(ini, IniFilename)
+                end
+            end
+        else
+            isDraggingInfo = false
         end
 
         if active then
@@ -229,63 +294,316 @@ function main()
                 sampSendChat('/ot')
                 lastOtTime = currentTime
             end
-            info_window_state[0] = true
         else
-            info_window_state[0] = false
+            startTime = os.clock()
         end
     end
 end
 
--- ОБРАБОТКА СОБЫТИЙ
+function resetIO()
+    for i = 0, 511 do imgui.GetIO().KeysDown[i] = false end
+    for i = 0, 4 do imgui.GetIO().MouseDown[i] = false end
+    imgui.GetIO().KeyCtrl = false; imgui.GetIO().KeyShift = false
+    imgui.GetIO().KeyAlt = false; imgui.GetIO().KeySuper = false
+end
+
+function startMovingWindow()
+    MoveWidget = true
+    showInfoWindow()
+    sampToggleCursor(true)
+    main_window_state[0] = false
+    sampAddChatMessage(taginf .. '{FFFF00}Режим перемещения окна активирован. Нажмите "Пробел" для подтверждения.', -1)
+end
+
+imgui.OnInitialize(function()
+    imgui.GetIO().IniFilename = nil
+    imgui.GetIO().Fonts:AddFontDefault()
+    decor()
+end)
+
+function decor()
+    imgui.SwitchContext()
+    local style = imgui.GetStyle()
+    style.WindowPadding = imgui.ImVec2(12,12)
+    style.WindowRounding = 12
+    style.ChildRounding = 10
+    style.FramePadding = imgui.ImVec2(8,6)
+    style.FrameRounding = 10
+    style.ItemSpacing = imgui.ImVec2(10,10)
+    style.ItemInnerSpacing = imgui.ImVec2(10,10)
+    style.ScrollbarSize = 12
+    style.ScrollbarRounding = 10
+    style.GrabRounding = 10
+    style.PopupRounding = 10
+    style.WindowTitleAlign = imgui.ImVec2(0.5,0.5)
+    style.ButtonTextAlign = imgui.ImVec2(0.5,0.5)
+end
+
 function sampev.onServerMessage(color, text)
     if text:find('%[(%W+)%] от (%w+_%w+)%[(%d+)%]:') then
         if active then sampSendChat('/ot') end
     end
-    if hideFloodMsg[0] and (text:find("Сейчас нет вопросов") or text:find("Не флуди!")) then return false end
+    return filterFloodMessage(text)
+end
+
+function onToggleActive()
+    active = not active
+    manualDisable = not active
+    disableAutoStartOnToggle = not active
+    local statusArz = active and 'включена' or 'выключена'
+    show_arz_notify('info', 'RepFlow', 'Ловля ' .. statusArz .. '!', 2000)
+end
+
+function saveWindowSettings()
+    ini.widget.posX = ini.widget.posX or 400
+    ini.widget.posY = ini.widget.posY or 400
+    inicfg.save(ini, IniFilename)
+    sampAddChatMessage(taginf .. '{00FF00}Положение окна сохранено!', -1)
 end
 
 function sampev.onShowDialog(dialogId, style, title, button1, button2, text)
     if dialogId == 1334 then
         lastDialogTime = os.clock()
         reportAnsweredCount = reportAnsweredCount + 1
-        if active then active = false end
+        sampAddChatMessage(tag .. '{00FF00}Репорт принят! Отвечено репорта: ' .. reportAnsweredCount, -1)
+        if active then
+            active = false
+            show_arz_notify('info', 'RepFlow', 'Ловля отключена из-за окна репорта!', 3000)
+        end
     end
 end
 
--- ИНТЕРФЕЙС
-function drawMainTab()
-    imgui.Text(u8"Настройки флудера")
-    imgui.Separator()
-    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
-    if imgui.BeginChild("Flooder", imgui.ImVec2(0,140), true) then
-        imgui.Checkbox(u8'Использовать миллисекунды', useMilliseconds)
-        imgui.Text(u8'Интервал: ' .. otInterval[0])
-        imgui.InputText(u8'##otInt', otIntervalBuffer, 5)
-        if imgui.Button(u8"Сохранить") then
-            local v = tonumber(ffi.string(otIntervalBuffer))
-            if v then otInterval[0] = v; ini.main.otInterval = v; inicfg.save(ini, IniFilename) end
+function checkAutoStart()
+    local currentTime = os.clock()
+    if autoStartEnabled[0] and not active and not gameMinimized and (afkExitTime == 0 or currentTime - afkExitTime >= afkCooldown) then
+        if not disableAutoStartOnToggle and (currentTime - lastDialogTime) > dialogTimeout[0] then
+            active = true
+            show_arz_notify('info', 'RepFlow', 'Ловля включена по таймауту', 3000)
         end
     end
-    imgui.EndChild(); imgui.PopStyleColor()
+end
+
+function saveSettings() ini.main.dialogTimeout = dialogTimeout[0]; inicfg.save(ini, IniFilename) end
+
+function imgui.Link(link, text)
+    text = text or link
+    local tSize = imgui.CalcTextSize(text)
+    local p = imgui.GetCursorScreenPos()
+    local DL = imgui.GetWindowDrawList()
+    local col = { 0xFFFF7700, 0xFFFF9900 }
+    if imgui.InvisibleButton('##' .. link, tSize) then os.execute('explorer ' .. link) end
+    local color = imgui.IsItemHovered() and col[1] or col[2]
+    DL:AddText(p, color, text)
+    DL:AddLine(imgui.ImVec2(p.x, p.y + tSize.y), imgui.ImVec2(p.x + tSize.x, p.y + tSize.y), color)
+end
+
+function cmd_arep(arg)
+    main_window_state[0] = not main_window_state[0]
+    imgui.Process = main_window_state[0]
+end
+
+-- Функции отрисовки вкладок
+function drawMainTab()
+    imgui.Text(emoji('gear') .. u8" Настройки  /  " .. emoji('message') .. u8" Флудер")
+    imgui.Separator()
+    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
+    if imgui.BeginChild("Flooder", imgui.ImVec2(0,150), true) then
+        imgui.PushItemWidth(100)
+        if imgui.Checkbox(u8'Использовать миллисекунды', useMilliseconds) then
+            ini.main.useMilliseconds = useMilliseconds[0]
+            inicfg.save(ini, IniFilename)
+        end
+        imgui.PopItemWidth()
+        imgui.Text(u8'Интервал отправки команды /ot (' .. (useMilliseconds[0] and u8'в миллисекундах' or u8'в секундах') .. '):')
+        imgui.Text(u8'Текущий интервал: ' .. otInterval[0] .. (useMilliseconds[0] and u8' мс' or u8' секунд'))
+        imgui.PushItemWidth(45)
+        imgui.InputText(u8'##otIntervalInput', otIntervalBuffer, ffi.sizeof(otIntervalBuffer))
+        imgui.SameLine()
+        if imgui.Button(emoji('floppy_disk') .. u8" Сохранить интервал") then
+            local newValue = tonumber(ffi.string(otIntervalBuffer))
+            if newValue then
+                otInterval[0] = newValue
+                ini.main.otInterval = newValue
+                inicfg.save(ini, IniFilename)
+                sampAddChatMessage(taginf .. "Интервал сохранён: {32CD32}" .. newValue .. (useMilliseconds[0] and " мс" or " секунд"), -1)
+            else
+                sampAddChatMessage(taginf .. "Некорректное значение. {32CD32}Введите число.", -1)
+            end
+        end
+        imgui.PopItemWidth()
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
+    if imgui.BeginChild("InfoFlooder", imgui.ImVec2(0,65), true) then
+        imgui.Text(u8'Скрипт также ищет надпись в чате [Репорт] от Имя_Фамилия.')
+        imgui.Text(u8'Флудер нужен для дополнительного способа ловли репорта.')
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
 end
 
 function drawSettingsTab()
-    imgui.Text(u8"Основные настройки")
+    imgui.Text(emoji('gear') .. u8" Настройки  /  " .. emoji('sliders') .. u8" Основные настройки")
     imgui.Separator()
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
-    if imgui.BeginChild("Settings", imgui.ImVec2(0,220), true) then
-        imgui.Text(u8'Клавиша: ' .. keyBindName)
-        if imgui.Button(u8'Сменить клавишу') then changingKey = true end
-        imgui.Checkbox(u8'Обработка диалогов', dialogHandlerEnabled)
-        imgui.Checkbox(u8'Автостарт ловли', autoStartEnabled)
-        imgui.Checkbox(u8'Скрыть "Не флуди"', hideFloodMsg)
-        if imgui.Button(u8"Сменить положение инфо-окна") then
-            MoveWidget = true
-            sampToggleCursor(true)
-            main_window_state[0] = false
+    if imgui.BeginChild("KeyBind", imgui.ImVec2(0,60), true) then
+        imgui.Text(u8'Текущая клавиша активации:')
+        imgui.SameLine()
+        if imgui.Button(u8'' .. keyBindName) then
+            changingKey = true
+            show_arz_notify('info', 'RepFlow', 'Нажмите новую клавишу для активации', 2000)
         end
     end
-    imgui.EndChild(); imgui.PopStyleColor()
+    imgui.EndChild()
+    imgui.PopStyleColor()
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
+    if imgui.BeginChild("DialogOptions", imgui.ImVec2(0,150), true) then
+        imgui.Text(u8"Обработка диалогов")
+        if imgui.Checkbox(u8'Обрабатывать диалоги', dialogHandlerEnabled) then
+            ini.main.dialogHandlerEnabled = dialogHandlerEnabled[0]
+            inicfg.save(ini, IniFilename)
+        end
+        if imgui.Checkbox(u8'Автостарт ловли по большому активу', autoStartEnabled) then
+            ini.main.autoStartEnabled = autoStartEnabled[0]
+            inicfg.save(ini, IniFilename)
+        end
+        if imgui.Checkbox(u8'Отключить сообщение "Не флуди"', hideFloodMsg) then
+            ini.main.otklflud = hideFloodMsg[0]
+            inicfg.save(ini, IniFilename)
+        end
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
+    if imgui.BeginChild("AutoStartTimeout", imgui.ImVec2(0,100), true) then
+        imgui.Text(u8'Настройка тайм-аута автостарта')
+        imgui.PushItemWidth(45)
+        imgui.Text(u8'Текущий тайм-аут: ' .. dialogTimeout[0] .. u8' секунд')
+        imgui.InputText(u8'', dialogTimeoutBuffer, ffi.sizeof(dialogTimeoutBuffer))
+        imgui.SameLine()
+        if imgui.Button(emoji('floppy_disk') .. u8" Сохранить тайм-аут") then
+            local newValue = tonumber(ffi.string(dialogTimeoutBuffer))
+            if newValue and newValue >= 1 and newValue <= 9999 then
+                dialogTimeout[0] = newValue
+                saveSettings()
+                sampAddChatMessage(taginf .. "Тайм-аут сохранён: {32CD32}" .. newValue .. " секунд", -1)
+            else
+                sampAddChatMessage(taginf .. "Некорректное значение. {32CD32}Введите от 1 до 9999.", -1)
+            end
+        end
+        imgui.PopItemWidth()
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
+    if imgui.BeginChild("WindowPosition", imgui.ImVec2(0,50), true) then
+        imgui.Text(u8'Положение окна информации:')
+        imgui.SameLine()
+        if imgui.Button(u8'Изменить положение') then
+            startMovingWindow()
+        end
+        imgui.TextDisabled(u8"(Alt + ЛКМ по заголовку для перемещения)")
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+end
+
+function drawThemesTab()
+    imgui.Text(emoji('palette') .. u8" Темы")
+    imgui.Separator()
+    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
+    if imgui.BeginChild("Themes", imgui.ImVec2(0,350), true) then
+        imgui.Text(u8"Выберите тему оформления:")
+        local themeNames = { "Прозрачная", "Кастомная" }
+        for i, name in ipairs(themeNames) do
+            if imgui.Button(u8(name), imgui.ImVec2(120,40)) then
+                currentTheme[0] = i-1
+                applyTheme(currentTheme[0])
+                ini.main.theme = currentTheme[0]
+                inicfg.save(ini, IniFilename)
+                sampAddChatMessage(taginf .. "Тема изменена на {32CD32}" .. name, -1)
+            end
+            if i < #themeNames then imgui.SameLine() end
+        end
+
+        local themeIndex
+        if currentTheme and type(currentTheme) == "table" and type(currentTheme[0]) == "number" then
+            themeIndex = currentTheme[0]
+        else
+            themeIndex = tonumber(ini.main.theme) or 0
+        end
+        themeIndex = math.floor(themeIndex)
+        if themeIndex < 0 or themeIndex > 1 then themeIndex = 0 end
+
+        imgui.Text(u8"Текущая тема: " .. themeNames[themeIndex+1])
+
+        if themeIndex == 0 then
+            imgui.Separator()
+            imgui.Text(u8"Прозрачность фона:")
+            if imgui.SliderFloat("##transparency", transparency, 0.3, 1.0, "%.2f") then
+                applyTheme(0)
+                ini.main.transparency = transparency[0]
+                inicfg.save(ini, IniFilename)
+            end
+            imgui.TextDisabled(u8"1.0 - непрозрачный, 0.3 - сильно прозрачный")
+        elseif themeIndex == 1 then
+            imgui.Separator()
+            imgui.Text(u8"Настройка кастомных цветов:")
+
+            local changed = false
+            if imgui.ColorEdit4("Левая панель", customLeft, imgui.ColorEditFlags.NoInputs + imgui.ColorEditFlags.NoLabel) then
+                changed = true
+            end
+            imgui.SameLine()
+            imgui.Text(u8"Левая панель")
+
+            if imgui.ColorEdit4("Правая панель", customRight, imgui.ColorEditFlags.NoInputs + imgui.ColorEditFlags.NoLabel) then
+                changed = true
+            end
+            imgui.SameLine()
+            imgui.Text(u8"Правая панель")
+
+            if imgui.ColorEdit4("Дочерняя панель", customChild, imgui.ColorEditFlags.NoInputs + imgui.ColorEditFlags.NoLabel) then
+                changed = true
+            end
+            imgui.SameLine()
+            imgui.Text(u8"Дочерняя панель")
+
+            if imgui.ColorEdit4("Цвет наведения", customHover, imgui.ColorEditFlags.NoInputs + imgui.ColorEditFlags.NoLabel) then
+                changed = true
+            end
+            imgui.SameLine()
+            imgui.Text(u8"Цвет наведения")
+
+            if changed then
+                ini.main.customLeftR = customLeft[0]
+                ini.main.customLeftG = customLeft[1]
+                ini.main.customLeftB = customLeft[2]
+                ini.main.customLeftA = customLeft[3]
+                ini.main.customRightR = customRight[0]
+                ini.main.customRightG = customRight[1]
+                ini.main.customRightB = customRight[2]
+                ini.main.customRightA = customRight[3]
+                ini.main.customChildR = customChild[0]
+                ini.main.customChildG = customChild[1]
+                ini.main.customChildB = customChild[2]
+                ini.main.customChildA = customChild[3]
+                ini.main.customHoverR = customHover[0]
+                ini.main.customHoverG = customHover[1]
+                ini.main.customHoverB = customHover[2]
+                ini.main.customHoverA = customHover[3]
+                inicfg.save(ini, IniFilename)
+                applyTheme(1)
+            end
+        end
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
 end
 
 function drawUpdatesTab()
@@ -300,118 +618,217 @@ function drawUpdatesTab()
     end
 end
 
-function drawInfoTab()
-    imgui.Text(u8"Информация")
+function filterFloodMessage(text)
+    if hideFloodMsg[0] then
+        if text:find("Сейчас нет вопросов в репорт!", 1, true) or text:find("Не флуди!", 1, true) then
+            return false
+        end
+    end
+    return true
+end
+
+function checkPauseAndDisableAutoStart()
+    if isPauseMenuActive() then
+        if not gameMinimized then
+            wasActiveBeforePause = active
+            if active then active = false end
+            gameMinimized = true
+        end
+    else
+        if gameMinimized then
+            gameMinimized = false
+            if wasActiveBeforePause then
+                sampAddChatMessage(tag .. '{FFFFFF}Вы вышли из паузы. Ловля отключена из-за AFK!!', -1)
+            end
+        end
+    end
+end
+
+-- ИСПРАВЛЕННАЯ ВКЛАДКА "ИНФОРМАЦИЯ" (убраны строки с временем работы и ником)
+function drawInfoTab(panelColor)
+    panelColor = panelColor or colors.childPanelColor
+    imgui.Text(emoji('star') .. u8" RepFlow  /  " .. emoji('circle_info') .. u8" Информация")
     imgui.Separator()
-    imgui.Text(u8"Автор: Balenciaga_Collins")
-    imgui.Text(u8"Версия: " .. scriptver)
-    if imgui.Button(u8"Telegram") then os.execute('explorer https://t.me/Repflowarizona') end
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, panelColor)
+    if imgui.BeginChild("Author", imgui.ImVec2(0,130), true) then
+        imgui.Text(u8'Автор: Balenciaga_Collins[18]')
+        imgui.Text(u8'Версия: ' .. scriptver)
+        imgui.Text(u8'Связь с разработчиком:')
+        imgui.SameLine()
+        imgui.Link('https://t.me/Repflowarizona', 'Telegram')
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, panelColor)
+    if imgui.BeginChild("Info2", imgui.ImVec2(0,100), true) then
+        imgui.Text(u8'Скрипт автоматически отправляет команду /ot.')
+        imgui.Text(u8'Через определенные интервалы времени.')
+        imgui.Text(u8'А также выслеживает определенные надписи.')
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, panelColor)
+    if imgui.BeginChild("Info3", imgui.ImVec2(0,110), true) then
+        imgui.CenterText(u8'Благодарности:')
+        imgui.Text(u8'Тестер: Arman_Carukjan')
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
 end
 
 function drawChangeLogTab()
-    imgui.Text(u8"История обновлений")
+    imgui.Text(emoji('star') .. u8" RepFlow  /  " .. emoji('bolt') .. u8" ChangeLog")
     imgui.Separator()
+
     for _, entry in ipairs(changelogEntries) do
         if imgui.CollapsingHeader(u8("Версия ") .. entry.version) then
-            imgui.TextWrapped(entry.description)
+            imgui.Text(u8(entry.description))
         end
     end
 end
 
-function drawThemesTab()
-    imgui.Text(u8"Настройка внешнего вида")
-    imgui.Separator()
-    if imgui.Button(u8"Прозрачная") then currentTheme[0] = 0; applyTheme(0); ini.main.theme = 0; inicfg.save(ini, IniFilename) end
-    imgui.SameLine()
-    if imgui.Button(u8"Кастомная") then currentTheme[0] = 1; applyTheme(1); ini.main.theme = 1; inicfg.save(ini, IniFilename) end
-    if currentTheme[0] == 0 then
-        imgui.SliderFloat(u8"Прозрачность", transparency, 0.3, 1.0)
-        if imgui.IsItemDeactivated() then applyTheme(0); ini.main.transparency = transparency[0]; inicfg.save(ini, IniFilename) end
-    end
-end
-
--- ГЛАВНЫЙ РЕНДЕР
 imgui.OnFrame(function() return main_window_state[0] end, function()
     imgui.SetNextWindowSize(imgui.ImVec2(ini.widget.sizeX, ini.widget.sizeY), imgui.Cond.FirstUseEver)
+    imgui.SetNextWindowPos(imgui.ImVec2(sw/2, sh/2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5,0.5))
     imgui.PushStyleColor(imgui.Col.WindowBg, colors.rightPanelColor)
-    if imgui.Begin(u8'RepFlow | Premium', main_window_state, imgui.WindowFlags.NoCollapse) then
+
+    if imgui.Begin(emoji('bolt') .. u8' RepFlow | Premium', main_window_state, imgui.WindowFlags.NoCollapse) then
+
         imgui.PushStyleColor(imgui.Col.ChildBg, colors.leftPanelColor)
-        if imgui.BeginChild("left", imgui.ImVec2(130,-1), true) then
-            local tabs = {u8"Флудер", u8"Настройки", u8"Инфо", u8"Лог", u8"Темы", u8"Обновы"}
-            for i, name in ipairs(tabs) do
-                if imgui.Button(name, imgui.ImVec2(115, 35)) then active_tab[0] = i-1 end
+        if imgui.BeginChild("left_panel", imgui.ImVec2(130,-1), false) then
+            local tabNames = { "Флудер", "Настройки", "Информация", "ChangeLog", "Темы", "Обновления" }
+            for i, name in ipairs(tabNames) do
+                if i-1 == active_tab[0] then
+                    imgui.PushStyleColor(imgui.Col.Button, colors.hoverColor)
+                else
+                    imgui.PushStyleColor(imgui.Col.Button, colors.leftPanelColor)
+                end
+                imgui.PushStyleColor(imgui.Col.ButtonHovered, colors.hoverColor)
+                imgui.PushStyleColor(imgui.Col.ButtonActive, colors.hoverColor)
+
+                if imgui.Button(u8(name), imgui.ImVec2(125,40)) then
+                    active_tab[0] = i-1
+                end
+                imgui.PopStyleColor(3)
             end
         end
-        imgui.EndChild(); imgui.PopStyleColor(); imgui.SameLine()
-        
-        if imgui.BeginChild("right", imgui.ImVec2(-1,-1), false) then
+        imgui.EndChild()
+        imgui.PopStyleColor()
+
+        imgui.SameLine()
+        imgui.PushStyleColor(imgui.Col.ChildBg, colors.rightPanelColor)
+        if imgui.BeginChild("right_panel", imgui.ImVec2(-1,0), false) then
             if active_tab[0] == 0 then drawMainTab()
             elseif active_tab[0] == 1 then drawSettingsTab()
-            elseif active_tab[0] == 2 then drawInfoTab()
+            elseif active_tab[0] == 2 then drawInfoTab(colors.rightPanelColor)
             elseif active_tab[0] == 3 then drawChangeLogTab()
             elseif active_tab[0] == 4 then drawThemesTab()
             elseif active_tab[0] == 5 then drawUpdatesTab() end
         end
         imgui.EndChild()
-    end
-    imgui.End(); imgui.PopStyleColor()
-end)
+        imgui.PopStyleColor()
 
--- ОКНО ВИДЖЕТА
-imgui.OnFrame(function() return info_window_state[0] or MoveWidget end, function()
-    imgui.SetNextWindowSize(imgui.ImVec2(240, active and 100 or 180), imgui.Cond.Always)
-    imgui.SetNextWindowPos(imgui.ImVec2(ini.widget.posX, ini.widget.posY), imgui.Cond.Always)
-    
-    local flags = imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize
-    if not MoveWidget then flags = flags + imgui.WindowFlags.NoInputs end
-    
-    imgui.Begin("InfoPanel", nil, flags)
-    imgui.Text(u8"Статус: " .. (active and u8"ВКЛ" or u8"ВЫКЛ"))
-    imgui.Text(u8"Репортов: " .. reportAnsweredCount)
-    if not active then
-        imgui.Text(u8"Ник: " .. my_nick_utf8)
-        imgui.Text(u8"Сессия: " .. formatTime(os.clock() - scriptStartTime))
-        if MoveWidget then
-            imgui.Separator()
-            imgui.Text(u8"ПЕРЕМЕЩАЙТЕ МЫШКОЙ")
-            if imgui.Button(u8"Сохранить позицию", imgui.ImVec2(-1, 25)) then
-                MoveWidget = false
-                sampToggleCursor(false)
-                inicfg.save(ini, IniFilename)
-            end
+        local winSize = imgui.GetWindowSize()
+        if lastWindowSize == nil then
+            lastWindowSize = imgui.ImVec2(winSize.x, winSize.y)
+        elseif lastWindowSize.x ~= winSize.x or lastWindowSize.y ~= winSize.y then
+            lastWindowSize = imgui.ImVec2(winSize.x, winSize.y)
+            ini.widget.sizeX = winSize.x
+            ini.widget.sizeY = winSize.y
+            inicfg.save(ini, IniFilename)
         end
     end
-    
-    if MoveWidget and imgui.IsWindowHovered() and imgui.IsMouseDragging(0) then
-        local delta = imgui.GetIO().MouseDelta
-        ini.widget.posX = ini.widget.posX + delta.x
-        ini.widget.posY = ini.widget.posY + delta.y
+    imgui.End()
+    imgui.PopStyleColor()
+end)
+
+function onWindowMessage(msg, wparam, lparam)
+    if changingKey then
+        if msg == 0x100 or msg == 0x101 then
+            keyBind = wparam
+            keyBindName = vkeys.id_to_name(keyBind)
+            changingKey = false
+            ini.main.keyBind = string.format("0x%X", keyBind)
+            ini.main.keyBindName = keyBindName
+            inicfg.save(ini, IniFilename)
+            sampAddChatMessage(string.format(tag .. '{FFFFFF}Новая клавиша активации ловли репорта: {00FF00}%s', keyBindName), -1)
+            return false
+        end
     end
+end
+
+function imgui.CenterText(text)
+    local width = imgui.GetWindowWidth()
+    local calc = imgui.CalcTextSize(text)
+    imgui.SetCursorPosX(width/2 - calc.x/2)
+    imgui.Text(text)
+end
+
+function show_arz_notify(type, title, text, time)
+    if MONET_VERSION then
+        if type == 'info' then type = 3 elseif type == 'error' then type = 2 elseif type == 'success' then type = 1 end
+        local bs = raknetNewBitStream()
+        raknetBitStreamWriteInt8(bs,62)
+        raknetBitStreamWriteInt8(bs,6)
+        raknetBitStreamWriteBool(bs,true)
+        raknetEmulPacketReceiveBitStream(220,bs)
+        raknetDeleteBitStream(bs)
+        local json = encodeJson({styleInt=type,title=title,text=text,duration=time})
+        local bs = raknetNewBitStream()
+        raknetBitStreamWriteInt8(bs,84)
+        raknetBitStreamWriteInt8(bs,6)
+        raknetBitStreamWriteInt8(bs,0)
+        raknetBitStreamWriteInt32(bs,#json)
+        raknetBitStreamWriteString(bs,json)
+        raknetEmulPacketReceiveBitStream(220,bs)
+        raknetDeleteBitStream(bs)
+    else
+        local str = ('window.executeEvent(\'event.notify.initialize\', \'["%s", "%s", "%s", "%s"]\');'):format(type,title,text,time)
+        local bs = raknetNewBitStream()
+        raknetBitStreamWriteInt8(bs,17)
+        raknetBitStreamWriteInt32(bs,0)
+        raknetBitStreamWriteInt32(bs,#str)
+        raknetBitStreamWriteString(bs,str)
+        raknetEmulPacketReceiveBitStream(220,bs)
+        raknetDeleteBitStream(bs)
+    end
+end
+
+-- Окно информации (без изменений)
+imgui.OnFrame(function() return info_window_state[0] end, function(self)
+    self.HideCursor = true
+    local windowWidth = 240
+    local windowHeight = active and 120 or 280
+    imgui.SetNextWindowSize(imgui.ImVec2(windowWidth, windowHeight), imgui.Cond.FirstUseEver)
+    imgui.SetNextWindowPos(imgui.ImVec2(ini.widget.posX, ini.widget.posY), imgui.Cond.Always)
+
+    imgui.Begin(emoji('star') .. u8" | Информация ", info_window_state, 
+                imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoInputs)
+
+    imgui.CenterText(u8'Статус Ловли: Включена')
+    local elapsedTime = os.clock() - startTime
+    imgui.CenterText(string.format(u8'Время работы: %.2f сек', elapsedTime))
+    imgui.CenterText(string.format(u8'Отвечено репорта: %d', reportAnsweredCount))
+
+    if not active then
+        imgui.Separator()
+        imgui.Text(u8'Обработка диалогов:')
+        imgui.SameLine()
+        imgui.Text(dialogHandlerEnabled[0] and u8'Включена' or u8'Выкл.')
+        imgui.Text(u8'Автостарт:')
+        imgui.SameLine()
+        imgui.Text(autoStartEnabled[0] and u8'Включен' or u8'Выключен')
+        imgui.Separator()
+        imgui.TextDisabled(u8"Перемещение: Alt + ЛКМ по заголовку")
+        imgui.Text(u8"Скрипт активен: " .. formatTime(os.clock() - scriptStartTime))
+        imgui.Text(u8"Ваш ник: " .. my_nick_utf8)
+    end
+
     imgui.End()
 end)
 
--- УВЕДОМЛЕНИЯ
-function show_arz_notify(type, title, text, time)
-    local str = ('window.executeEvent(\'event.notify.initialize\', \'["%s", "%s", "%s", "%s"]\');'):format(type,title,text,time)
-    local bs = raknetNewBitStream()
-    raknetBitStreamWriteInt8(bs,17)
-    raknetBitStreamWriteInt32(bs,0)
-    raknetBitStreamWriteInt32(bs,#str)
-    raknetBitStreamWriteString(bs,str)
-    raknetEmulPacketReceiveBitStream(220,bs)
-    raknetDeleteBitStream(bs)
-end
-
-function onWindowMessage(msg, wparam, lparam)
-    if changingKey and (msg == 0x100 or msg == 0x101) then
-        keyBind = wparam
-        keyBindName = vkeys.id_to_name(keyBind)
-        ini.main.keyBind = tostring(keyBind); ini.main.keyBindName = keyBindName
-        inicfg.save(ini, IniFilename); changingKey = false
-        return false
-    end
-end
-
-
-
-
+function showInfoWindow() info_window_state[0] = true end
+function showInfoWindowOff() info_window_state[0] = false end
