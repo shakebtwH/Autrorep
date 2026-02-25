@@ -19,77 +19,82 @@ local scriptver = "4.13 | Premium"
 local AUTO_UPDATE = true
 local UPDATE_PREFIX = "[RepFlow Update]: "
 
-local GITHUB_VERSION_URL = "https://raw.githubusercontent.com/USERNAME/REPO/main/version.txt"
-local GITHUB_SCRIPT_URL  = "https://raw.githubusercontent.com/USERNAME/REPO/main/repflow.lua"
+local GITHUB_VERSION_URL = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/version.txt"
+local GITHUB_SCRIPT_URL = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/%21repflow.lua"
 
+-- Получаем текущую версию скрипта
 local function getCurrentVersionNumber()
     local version = scriptver:match("(%d+%.%d+)")
     return tonumber(version) or 0
 end
 
+-- Убираем лишние пробелы
+local function trim(s) return s:match("^%s*(.-)%s*$") end
+
+-- Проверка обновления
 local function checkForUpdate(manual)
     if not AUTO_UPDATE then return end
 
     sampAddChatMessage(UPDATE_PREFIX .. "Проверка обновлений...", -1)
 
-    downloadUrlToFile(GITHUB_VERSION_URL, getWorkingDirectory() .. "\\repflow_version.txt",
-        function(id, status)
-            if status == dlstatus.STATUS_ENDDOWNLOADDATA then
-                local f = io.open(getWorkingDirectory() .. "\\repflow_version.txt", "r")
-                if not f then 
-                    sampAddChatMessage(UPDATE_PREFIX .. "Ошибка чтения version.txt", -1)
-                    return 
-                end
+    -- добавляем случайный параметр для обхода кеша GitHub
+    local url = GITHUB_VERSION_URL .. "?rnd=" .. math.random(100000)
+    
+    downloadUrlToFile(url, getWorkingDirectory().."\\repflow_version.txt", function(id, status)
+        if status == 0 then  -- 0 = завершено
+            local f = io.open(getWorkingDirectory().."\\repflow_version.txt","r")
+            if not f then 
+                sampAddChatMessage(UPDATE_PREFIX .. "Ошибка чтения version.txt", -1)
+                return 
+            end
 
-                local remoteVersion = tonumber(f:read("*a"))
-                f:close()
-                os.remove(getWorkingDirectory() .. "\\repflow_version.txt")
+            local text = trim(f:read("*a"))
+            f:close()
+            os.remove(getWorkingDirectory().."\\repflow_version.txt")
 
-                if not remoteVersion then
-                    sampAddChatMessage(UPDATE_PREFIX .. "Некорректная версия на сервере.", -1)
-                    return
-                end
+            local remoteVersion = tonumber(text)
+            if not remoteVersion then
+                sampAddChatMessage(UPDATE_PREFIX .. "Некорректная версия на сервере.", -1)
+                return
+            end
 
-                local currentVersion = getCurrentVersionNumber()
+            local currentVersion = getCurrentVersionNumber()
 
-                if remoteVersion > currentVersion then
-                    sampAddChatMessage(UPDATE_PREFIX .. 
-                        string.format("Доступно обновление! %.2f -> %.2f", currentVersion, remoteVersion), -1)
+            if remoteVersion > currentVersion then
+                sampAddChatMessage(UPDATE_PREFIX .. string.format("Доступно обновление! %.2f -> %.2f", currentVersion, remoteVersion), -1)
 
-                    downloadUrlToFile(GITHUB_SCRIPT_URL,
-                        thisScript().path .. ".new",
-                        function(id2, status2)
-                            if status2 == dlstatus.STATUS_ENDDOWNLOADDATA then
-                                local newFile = io.open(thisScript().path .. ".new", "r")
-                                if newFile then
-                                    local size = newFile:seek("end")
-                                    newFile:close()
+                local newFilePath = thisScript().path .. ".new"
+                downloadUrlToFile(GITHUB_SCRIPT_URL, newFilePath, function(id2, status2)
+                    if status2 == 0 then
+                        local newFile = io.open(newFilePath, "r")
+                        if newFile then
+                            local size = newFile:seek("end")
+                            newFile:close()
 
-                                    if size and size > 1000 then
-                                        os.remove(thisScript().path)
-                                        os.rename(thisScript().path .. ".new", thisScript().path)
-
-                                        sampAddChatMessage(UPDATE_PREFIX .. 
-                                            "Скрипт обновлён! Перезапуск...", -1)
-                                        wait(1000)
-                                        thisScript():reload()
-                                    else
-                                        sampAddChatMessage(UPDATE_PREFIX .. 
-                                            "Ошибка: файл повреждён.", -1)
-                                        os.remove(thisScript().path .. ".new")
-                                    end
-                                end
+                            if size and size > 1000 then
+                                lua_thread.create(function()
+                                    wait(500)
+                                    local oldPath = thisScript().path
+                                    os.remove(oldPath)
+                                    os.rename(newFilePath, oldPath)
+                                    sampAddChatMessage(UPDATE_PREFIX .. "Скрипт обновлён! Перезапуск...", -1)
+                                    wait(500)
+                                    thisScript():reload()
+                                end)
+                            else
+                                sampAddChatMessage(UPDATE_PREFIX .. "Ошибка: файл повреждён.", -1)
+                                os.remove(newFilePath)
                             end
                         end
-                    )
-                else
-                    if manual then
-                        sampAddChatMessage(UPDATE_PREFIX .. "У вас последняя версия.", -1)
                     end
+                end)
+            else
+                if manual then
+                    sampAddChatMessage(UPDATE_PREFIX .. "У вас последняя версия.", -1)
                 end
             end
         end
-    )
+    end)
 end
 
 local scriptStartTime = os.clock()
@@ -882,4 +887,5 @@ end)
 
 function showInfoWindow() info_window_state[0] = true end
 function showInfoWindowOff() info_window_state[0] = false end
+
 
