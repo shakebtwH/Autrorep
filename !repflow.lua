@@ -5,6 +5,7 @@ local vkeys = require 'vkeys'
 local encoding = require 'encoding'
 local inicfg = require 'inicfg'
 local ffi = require 'ffi'
+local utf8 = require 'utf8'  -- для работы с кириллицей
 
 -- Настройка кодировок
 encoding.default = 'CP1251'
@@ -26,11 +27,12 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.28 | Premium"
+local scriptver = "4.29 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
+    { version = "4.29 | Premium", description = "- Исправлена работа фильтра 'Не флуди' (корректная обработка кодировки и регистра)." },
     { version = "4.28 | Premium", description = "- Улучшен фильтр 'Не флуди' (удаление цветовых кодов {RRGGBB} и #AARRGGBB, поиск по ключевым словам)." },
     { version = "4.27 | Premium", description = "- Улучшен фильтр 'Не флуди' (нижний регистр, удаление цветовых кодов)." },
     { version = "4.26 | Premium", description = "- Исправлена ошибка 'show_arz_notify nil'." },
@@ -232,21 +234,29 @@ applyTheme(currentTheme[0])
 
 local lastWindowSize = nil
 
--- МОЩНЫЙ ФИЛЬТР СООБЩЕНИЙ
+-- МОЩНЫЙ ФИЛЬТР СООБЩЕНИЙ (исправленный)
 function filterFloodMessage(text)
     if hideFloodMsg[0] then
-        -- Удаляем все цветовые коды разных форматов: {RRGGBB}, #AARRGGBB, #RRGGBB
-        local clean = text:gsub("{%x+}", ""):gsub("#%x+", "")
+        -- Конвертируем из CP1251 в UTF-8 для корректного поиска русских фраз
+        local utf8_text = toUTF8(text)
+        -- Удаляем цветовые коды {RRGGBB}, #AARRGGBB, #RRGGBB
+        local clean = utf8_text:gsub("{%x+}", ""):gsub("#%x+", "")
         -- Удаляем пробелы в начале и конце
         clean = clean:match("^%s*(.-)%s*$")
-        -- Приводим к нижнему регистру
-        clean = clean:lower()
-        -- Проверяем наличие ключевых фраз
-        if clean:find("не флуди") or clean:find("сейчас нет вопросов в репорт") then
-            return false
+        -- Приводим к верхнему регистру для регистронезависимого сравнения
+        clean = utf8.upper(clean)
+        -- Ключевые фразы (уже в верхнем регистре)
+        local banPhrases = {
+            utf8.upper("не флуди"),
+            utf8.upper("сейчас нет вопросов в репорт")
+        }
+        for _, phrase in ipairs(banPhrases) do
+            if clean:find(phrase, 1, true) then  -- простое вхождение без паттернов
+                return false  -- скрыть сообщение
+            end
         end
     end
-    return true
+    return true  -- показать сообщение
 end
 
 function onToggleActive()
