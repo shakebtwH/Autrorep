@@ -26,16 +26,16 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.26 | Premium"
+local scriptver = "4.27 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.26 | Premium", description = "- Исправлена ошибка 'show_arz_notify nil' (перемещено определение функции)." },
-    { version = "4.25 | Premium", description = "- Исправлена работа фильтра 'Не флуди' (удаляются цветовые коды)." },
+    { version = "4.27 | Premium", description = "- Улучшен фильтр 'Не флуди' (удаление цветовых кодов, поиск по ключевым словам без учета знаков препинания)." },
+    { version = "4.26 | Premium", description = "- Исправлена ошибка 'show_arz_notify nil'." },
+    { version = "4.25 | Premium", description = "- Исправлена работа фильтра 'Не флуди'." },
     { version = "4.24 | Premium", description = "- Исправлена ошибка 'encoding.CP1251 is nil'." },
     { version = "4.23 | Premium", description = "- Исправлены кракозябры в чате." },
-    { version = "4.22 | Premium", description = "- Возвращена библиотека encoding." },
 }
 
 local keyBind = 0x5A
@@ -231,11 +231,17 @@ applyTheme(currentTheme[0])
 
 local lastWindowSize = nil
 
--- Фильтр сообщений (удаляем цветовые коды)
+-- УЛУЧШЕННЫЙ ФИЛЬТР СООБЩЕНИЙ
 function filterFloodMessage(text)
     if hideFloodMsg[0] then
-        local clean = text:gsub("{%x+}", "")  -- удаляем {RRGGBB}
-        if clean:find("Сейчас нет вопросов в репорт!", 1, true) or clean:find("Не флуди!", 1, true) then
+        -- Удаляем все цветовые коды вида {RRGGBB}
+        local clean = text:gsub("{%x+}", "")
+        -- Удаляем пробелы в начале и конце
+        clean = clean:match("^%s*(.-)%s*$")
+        -- Приводим к нижнему регистру для надежности (если вдруг сервер меняет регистр)
+        clean = clean:lower()
+        -- Проверяем наличие ключевых фраз (без учёта знаков препинания)
+        if clean:find("сейчас нет вопросов в репорт") or clean:find("не флуди") then
             return false
         end
     end
@@ -320,7 +326,7 @@ function imgui.CenterText(text)
     imgui.Text(text)
 end
 
--- ВКЛАДКИ (полностью из предыдущих версий, без изменений)
+-- ВКЛАДКИ
 function drawMainTab()
     imgui.Text("[G] Настройки  /  [M] Флудер")
     imgui.Separator()
