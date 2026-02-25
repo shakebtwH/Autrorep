@@ -5,28 +5,27 @@ local vkeys = require 'vkeys'
 local inicfg = require 'inicfg'
 local ffi = require 'ffi'
 
--- Для ручной перекодировки ника игрока из CP1251 в UTF-8
+-- Ручная перекодировка CP1251 -> UTF-8 (только для ника)
 local function cp1251_to_utf8(str)
     if not str then return "" end
     local res = {}
-    for i = 1, #str do
+    local i = 1
+    while i <= #str do
         local b = string.byte(str, i)
         if b < 0x80 then
             res[#res+1] = string.char(b)
+            i = i + 1
         elseif b >= 0xC0 and b <= 0xDF then
-            local b2 = string.byte(str, i+1)
-            res[#res+1] = string.char(0xC2 + (b2 and 0 or 0), 0x80 + (b2 and b2 or 0)) -- упрощённо, но для ника сойдёт
+            -- Двухбайтовый символ UTF-8 (для кириллицы в CP1251 это не тот случай, но оставим)
+            -- На самом деле CP1251 кириллица - это 0xC0-0xFF, преобразуем в UTF-8 двухбайтовый
+            local u = b - 0xC0 + 0x0410
+            local b1 = 0xD0 + math.floor(u / 0x40)
+            local b2 = 0x80 + (u % 0x40)
+            res[#res+1] = string.char(b1, b2)
+            i = i + 1
         else
-            -- для кириллицы в CP1251 (0xC0-0xFF) преобразуем в двухбайтовый UTF-8
-            local byte = b
-            if byte >= 0xC0 then
-                local u = byte - 0xC0 + 0x0410
-                local b1 = 0xD0 + bit.rshift(u, 6)
-                local b2 = 0x80 + bit.band(u, 0x3F)
-                res[#res+1] = string.char(b1, b2)
-            else
-                res[#res+1] = string.char(b)
-            end
+            -- Для безопасности просто пропускаем
+            i = i + 1
         end
     end
     return table.concat(res)
@@ -43,11 +42,12 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.20 | Premium"
+local scriptver = "4.21 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
+    { version = "4.20 | Premium", description = "- Исправлена ошибка 'sampGetCurrentPlayerName' (nil value)." },
     { version = "4.19 | Premium", description = "- Исправлена ошибка 'update_status nil' во вкладке обновлений." },
     { version = "4.18 | Premium", description = "- Полностью удалена поддержка FontAwesome и библиотека encoding." },
     { version = "4.17 | Premium", description = "- Убраны иконки, оставлены текстовые заглушки." },
@@ -92,7 +92,7 @@ local autoStartEnabled = new.bool(true)
 local dialogHandlerEnabled = new.bool(true)
 local hideFloodMsg = new.bool(true)
 
-local my_nick_utf8 = "Игрок"
+local my_nick_utf8 = "Игрок"  -- по умолчанию, если не удастся получить
 
 -- ФУНКЦИИ ОБНОВЛЕНИЯ
 function checkUpdates()
@@ -148,10 +148,20 @@ local function formatTime(seconds)
     return string.format("%02d:%02d:%02d", h, m, s)
 end
 
+-- Безопасное получение ника игрока
 local function getPlayerName()
-    local name = sampGetCurrentPlayerName()
+    local name = nil
+    -- Пробуем стандартную функцию SAMPFUNCS
+    if sampGetCurrentPlayerName then
+        name = sampGetCurrentPlayerName()
+    -- Если нет, пробуем через samp.lua (если подключена)
+    elseif samp and samp.get_current_player_name then
+        name = samp.get_current_player_name()
+    end
     if name and name ~= "" then
         my_nick_utf8 = cp1251_to_utf8(name)
+    else
+        my_nick_utf8 = "Игрок"
     end
 end
 
@@ -405,7 +415,7 @@ function cmd_arep(arg)
     imgui.Process = main_window_state[0]
 end
 
--- Вкладки
+-- Вкладки (текст без u8, просто строки)
 function drawMainTab()
     imgui.Text("[G] Настройки  /  [M] Флудер")
     imgui.Separator()
