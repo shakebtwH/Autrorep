@@ -26,12 +26,13 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.27 | Premium"
+local scriptver = "4.28 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.27 | Premium", description = "- Улучшен фильтр 'Не флуди' (удаление цветовых кодов, поиск по ключевым словам без учета знаков препинания)." },
+    { version = "4.28 | Premium", description = "- Улучшен фильтр 'Не флуди' (удаление цветовых кодов {RRGGBB} и #AARRGGBB, поиск по ключевым словам)." },
+    { version = "4.27 | Premium", description = "- Улучшен фильтр 'Не флуди' (нижний регистр, удаление цветовых кодов)." },
     { version = "4.26 | Premium", description = "- Исправлена ошибка 'show_arz_notify nil'." },
     { version = "4.25 | Premium", description = "- Исправлена работа фильтра 'Не флуди'." },
     { version = "4.24 | Premium", description = "- Исправлена ошибка 'encoding.CP1251 is nil'." },
@@ -231,17 +232,17 @@ applyTheme(currentTheme[0])
 
 local lastWindowSize = nil
 
--- УЛУЧШЕННЫЙ ФИЛЬТР СООБЩЕНИЙ
+-- МОЩНЫЙ ФИЛЬТР СООБЩЕНИЙ
 function filterFloodMessage(text)
     if hideFloodMsg[0] then
-        -- Удаляем все цветовые коды вида {RRGGBB}
-        local clean = text:gsub("{%x+}", "")
+        -- Удаляем все цветовые коды разных форматов: {RRGGBB}, #AARRGGBB, #RRGGBB
+        local clean = text:gsub("{%x+}", ""):gsub("#%x+", "")
         -- Удаляем пробелы в начале и конце
         clean = clean:match("^%s*(.-)%s*$")
-        -- Приводим к нижнему регистру для надежности (если вдруг сервер меняет регистр)
+        -- Приводим к нижнему регистру
         clean = clean:lower()
-        -- Проверяем наличие ключевых фраз (без учёта знаков препинания)
-        if clean:find("сейчас нет вопросов в репорт") or clean:find("не флуди") then
+        -- Проверяем наличие ключевых фраз
+        if clean:find("не флуди") or clean:find("сейчас нет вопросов в репорт") then
             return false
         end
     end
