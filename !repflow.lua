@@ -2,13 +2,35 @@ require 'lib.moonloader'
 local imgui = require 'mimgui'
 local sampev = require 'lib.samp.events'
 local vkeys = require 'vkeys'
-local encoding = require 'encoding'
 local inicfg = require 'inicfg'
 local ffi = require 'ffi'
 
--- Настройка кодировок: для входящих данных из игры (CP1251 -> UTF-8)
-encoding.default = 'CP1251'
-u8 = encoding.UTF8
+-- Для ручной перекодировки ника игрока из CP1251 в UTF-8
+local function cp1251_to_utf8(str)
+    if not str then return "" end
+    local res = {}
+    for i = 1, #str do
+        local b = string.byte(str, i)
+        if b < 0x80 then
+            res[#res+1] = string.char(b)
+        elseif b >= 0xC0 and b <= 0xDF then
+            local b2 = string.byte(str, i+1)
+            res[#res+1] = string.char(0xC2 + (b2 and 0 or 0), 0x80 + (b2 and b2 or 0)) -- упрощённо, но для ника сойдёт
+        else
+            -- для кириллицы в CP1251 (0xC0-0xFF) преобразуем в двухбайтовый UTF-8
+            local byte = b
+            if byte >= 0xC0 then
+                local u = byte - 0xC0 + 0x0410
+                local b1 = 0xD0 + bit.rshift(u, 6)
+                local b2 = 0x80 + bit.band(u, 0x3F)
+                res[#res+1] = string.char(b1, b2)
+            else
+                res[#res+1] = string.char(b)
+            end
+        end
+    end
+    return table.concat(res)
+end
 
 -- === НАСТРОЙКИ ОБНОВЛЕНИЯ ===
 local UPDATE_URL = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/update.json"
@@ -21,29 +43,18 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.19 | Premium"   -- версия без FontAwesome
+local scriptver = "4.20 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.17 | Premium", description = "- Полностью удалена поддержка FontAwesome для избежания проблем со шрифтами." },
-    { version = "4.16 | Premium", description = "- Исправлено отображение текста при сохранении файла в UTF-8 (убрана лишняя обёртка u8())." },
-    { version = "4.15 | Premium", description = "- Исправлена ошибка 'invalid escape sequence' при использовании FontAwesome." },
-    { version = "4.14 | Premium", description = "- Добавлена поддержка FontAwesome 6 (иконки в меню).\n- Требуется файл 'fa-solid-900.ttf' в папке со скриптом." },
-    { version = "4.13 | Premium", description = "- Удалена кастомная тема, добавлена чёрная тема.\n- Уменьшен размер главного окна до 600x400." },
-    { version = "4.12 | Premium", description = "- Добавлена функция автообновления скрипта." },
-    { version = "4.11 | Premium", description = "- Убраны строки 'Время работы' и 'Ваш ник' во вкладке 'Информация'." },
-    { version = "4.10 | Premium", description = "- Убрана полоса прокрутки в окне информации, увеличен размер окна." },
-    { version = "4.9 | Premium", description = "- В окне информации при включённой ловле показывается статус, время работы текущей сессии и счётчик отвеченных репортов." },
-    { version = "4.8 | Premium", description = "- Исправлена ошибка с корутинами (добавлены защитные проверки)." },
-    { version = "4.7 | Premium", description = "- Финальная стабильная версия без фона и лишних зависимостей." },
-    { version = "4.6 | Premium", description = "- Добавлена возможность установить своё изображение на задний фон главного окна." },
-    { version = "4.5 | Premium", description = "- Исправлен краш при открытии меню (убрана загрузка внешнего шрифта)." },
-    { version = "4.4 | Premium", description = "- Добавлена поддержка локального шрифта с эмодзи (NotoColorEmoji.ttf)." },
-    { version = "4.3 | Premium", description = "- Добавлена поддержка эмодзи через системные шрифты." },
-    { version = "4.2 | Premium", description = "- Удалена вкладка 'Статистика', скрипт приведён к минималистичному виду." },
-    { version = "4.1 | Premium", description = "- Удалены статические темы, оставлены только 'Прозрачная' и 'Кастомная'.\n- Исправлена ошибка с PlotHistogram." },
-    { version = "4.0 | Premium", description = "- Удалено приветствие.\n- Добавлена вкладка 'Статистика'." },
+    { version = "4.19 | Premium", description = "- Исправлена ошибка 'update_status nil' во вкладке обновлений." },
+    { version = "4.18 | Premium", description = "- Полностью удалена поддержка FontAwesome и библиотека encoding." },
+    { version = "4.17 | Premium", description = "- Убраны иконки, оставлены текстовые заглушки." },
+    { version = "4.16 | Premium", description = "- Исправлено отображение текста (убрана лишняя обёртка u8())." },
+    { version = "4.15 | Premium", description = "- Исправлена ошибка 'invalid escape sequence'." },
+    { version = "4.14 | Premium", description = "- Добавлена поддержка FontAwesome (позже удалена)." },
+    { version = "4.13 | Premium", description = "- Удалена кастомная тема, добавлена чёрная тема.\n- Уменьшен размер окна до 600x400." },
 }
 
 local keyBind = 0x5A
@@ -81,7 +92,7 @@ local autoStartEnabled = new.bool(true)
 local dialogHandlerEnabled = new.bool(true)
 local hideFloodMsg = new.bool(true)
 
-local my_nick_utf8 = "Игрок"   -- здесь будет имя в UTF-8 после преобразования
+local my_nick_utf8 = "Игрок"
 
 -- ФУНКЦИИ ОБНОВЛЕНИЯ
 function checkUpdates()
@@ -104,8 +115,14 @@ function checkUpdates()
                         update_status = "У вас последняя версия."
                         update_found = false
                     end
+                else
+                    update_status = "Ошибка при проверке"
                 end
+            else
+                update_status = "Не удалось загрузить"
             end
+        elseif status == 60 then
+            update_status = "Ошибка загрузки"
         end
     end)
 end
@@ -117,6 +134,8 @@ function updateScript()
         if status == 58 then
             sampAddChatMessage(tag .. "{00FF00}Скрипт обновлен! Перезагрузка...", -1)
             thisScript():reload()
+        elseif status == 60 then
+            update_status = "Ошибка загрузки"
         end
     end)
 end
@@ -130,9 +149,9 @@ local function formatTime(seconds)
 end
 
 local function getPlayerName()
-    local name = samp.get_current_player_name and samp.get_current_player_name()
+    local name = sampGetCurrentPlayerName()
     if name and name ~= "" then
-        my_nick_utf8 = u8(name)   -- преобразуем из CP1251 в UTF-8
+        my_nick_utf8 = cp1251_to_utf8(name)
     end
 end
 
@@ -300,9 +319,8 @@ function startMovingWindow()
 end
 
 imgui.OnInitialize(function()
-    local io = imgui.GetIO()
-    io.IniFilename = nil
-    io.Fonts:AddFontDefault()
+    imgui.GetIO().IniFilename = nil
+    imgui.GetIO().Fonts:AddFontDefault()
     decor()
 end)
 
@@ -387,7 +405,7 @@ function cmd_arep(arg)
     imgui.Process = main_window_state[0]
 end
 
--- Функции отрисовки вкладок (без иконок, только текст)
+-- Вкладки
 function drawMainTab()
     imgui.Text("[G] Настройки  /  [M] Флудер")
     imgui.Separator()
@@ -539,7 +557,7 @@ function drawUpdatesTab()
     imgui.Text("Облачное обновление")
     imgui.Separator()
     imgui.Text("Текущая версия: " .. scriptver)
-    imgui.Text("Статус: " .. update_status)
+    imgui.Text("Статус: " .. (update_status or "неизвестно"))
     if imgui.Button("Проверить заново", imgui.ImVec2(160, 30)) then checkUpdates() end
     if update_found then
         imgui.SameLine()
@@ -760,4 +778,3 @@ end)
 
 function showInfoWindow() info_window_state[0] = true end
 function showInfoWindowOff() info_window_state[0] = false end
-
