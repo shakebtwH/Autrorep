@@ -21,11 +21,13 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.12 | Premium"
+local scriptver = "4.13 | Premium"   -- обновлено
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
+    { version = "4.13 | Premium", description = "- Удалена кастомная тема, добавлена чёрная тема.\n- Уменьшен размер главного окна до 600x400." },  -- новая запись
+    { version = "4.12 | Premium", description = "- Добавлена функция автообновления скрипта, теперь не нужно заново переустанавливать скрипт." },
     { version = "4.11 | Premium", description = "- Убраны строки 'Время работы' и 'Ваш ник' во вкладке 'Информация'." },
     { version = "4.10 | Premium", description = "- Убрана полоса прокрутки в окне информации, увеличен размер окна." },
     { version = "4.9 | Premium", description = "- В окне информации при включённой ловле теперь показывается только статус, время работы текущей сессии и счётчик отвеченных репортов." },
@@ -134,17 +136,14 @@ local function getPlayerName()
     if name and name ~= "" then my_nick_utf8 = u8(name) end
 end
 
+-- Загрузка ini (убраны поля кастомных цветов, уменьшен размер окна по умолчанию)
 local ini = inicfg.load({
     main = {
         keyBind = "0x5A", keyBindName = 'Z', otInterval = 10, useMilliseconds = false,
         theme = 0, transparency = 0.8, dialogTimeout = 600, dialogHandlerEnabled = true,
         autoStartEnabled = true, otklflud = false,
-        customLeftR = 27/255, customLeftG = 20/255, customLeftB = 30/255, customLeftA = 1,
-        customRightR = 24/255, customRightG = 18/255, customRightB = 28/255, customRightA = 1,
-        customChildR = 18/255, customChildG = 13/255, customChildB = 22/255, customChildA = 1,
-        customHoverR = 63/255, customHoverG = 59/255, customHoverB = 66/255, customHoverA = 1,
     },
-    widget = { posX = 400, posY = 400, sizeX = 800, sizeY = 500 }
+    widget = { posX = 400, posY = 400, sizeX = 600, sizeY = 400 }  -- уменьшенный размер
 }, IniFilename)
 
 local MoveWidget = false
@@ -167,14 +166,10 @@ local currentTheme = new.int(themeValue)
 
 local transparency = new.float(ini.main.transparency or 0.8)
 
-local customLeft   = new.float[4](tonumber(ini.main.customLeftR)   or 27/255, tonumber(ini.main.customLeftG)   or 20/255, tonumber(ini.main.customLeftB)   or 30/255, tonumber(ini.main.customLeftA)   or 1)
-local customRight  = new.float[4](tonumber(ini.main.customRightR)  or 24/255, tonumber(ini.main.customRightG)  or 18/255, tonumber(ini.main.customRightB)  or 28/255, tonumber(ini.main.customRightA)  or 1)
-local customChild  = new.float[4](tonumber(ini.main.customChildR)  or 18/255, tonumber(ini.main.customChildG)  or 13/255, tonumber(ini.main.customChildB)  or 22/255, tonumber(ini.main.customChildA)  or 1)
-local customHover  = new.float[4](tonumber(ini.main.customHoverR)  or 63/255, tonumber(ini.main.customHoverG)  or 59/255, tonumber(ini.main.customHoverB)  or 66/255, tonumber(ini.main.customHoverA)  or 1)
-
+-- Функция применения темы (Прозрачная и Чёрная)
 local colors = {}
 local function applyTheme(themeIndex)
-    if themeIndex == 0 then
+    if themeIndex == 0 then  -- Прозрачная
         colors = {
             leftPanelColor = imgui.ImVec4(27/255,20/255,30/255,transparency[0]),
             rightPanelColor = imgui.ImVec4(24/255,18/255,28/255,transparency[0]),
@@ -182,12 +177,12 @@ local function applyTheme(themeIndex)
             hoverColor = imgui.ImVec4(63/255,59/255,66/255,transparency[0]),
             textColor = imgui.ImVec4(1,1,1,1),
         }
-    else
+    else  -- Чёрная тема
         colors = {
-            leftPanelColor = imgui.ImVec4(customLeft[0], customLeft[1], customLeft[2], customLeft[3]),
-            rightPanelColor = imgui.ImVec4(customRight[0], customRight[1], customRight[2], customRight[3]),
-            childPanelColor = imgui.ImVec4(customChild[0], customChild[1], customChild[2], customChild[3]),
-            hoverColor = imgui.ImVec4(customHover[0], customHover[1], customHover[2], customHover[3]),
+            leftPanelColor = imgui.ImVec4(0,0,0,transparency[0]),
+            rightPanelColor = imgui.ImVec4(0,0,0,transparency[0]),
+            childPanelColor = imgui.ImVec4(0.05,0.05,0.05,transparency[0]),
+            hoverColor = imgui.ImVec4(0.2,0.2,0.2,transparency[0]),
             textColor = imgui.ImVec4(1,1,1,1),
         }
     end
@@ -513,13 +508,14 @@ function drawSettingsTab()
     imgui.PopStyleColor()
 end
 
+-- Обновлённая вкладка тем (только Прозрачная и Чёрная, слайдер прозрачности для обеих)
 function drawThemesTab()
     imgui.Text(emoji('palette') .. u8" Темы")
     imgui.Separator()
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
-    if imgui.BeginChild("Themes", imgui.ImVec2(0,350), true) then
+    if imgui.BeginChild("Themes", imgui.ImVec2(0,250), true) then
         imgui.Text(u8"Выберите тему оформления:")
-        local themeNames = { "Прозрачная", "Кастомная" }
+        local themeNames = { "Прозрачная", "Чёрная" }
         for i, name in ipairs(themeNames) do
             if imgui.Button(u8(name), imgui.ImVec2(120,40)) then
                 currentTheme[0] = i-1
@@ -531,76 +527,20 @@ function drawThemesTab()
             if i < #themeNames then imgui.SameLine() end
         end
 
-        local themeIndex
-        if currentTheme and type(currentTheme) == "table" and type(currentTheme[0]) == "number" then
-            themeIndex = currentTheme[0]
-        else
-            themeIndex = tonumber(ini.main.theme) or 0
-        end
+        local themeIndex = currentTheme[0] or 0
         themeIndex = math.floor(themeIndex)
         if themeIndex < 0 or themeIndex > 1 then themeIndex = 0 end
 
         imgui.Text(u8"Текущая тема: " .. themeNames[themeIndex+1])
 
-        if themeIndex == 0 then
-            imgui.Separator()
-            imgui.Text(u8"Прозрачность фона:")
-            if imgui.SliderFloat("##transparency", transparency, 0.3, 1.0, "%.2f") then
-                applyTheme(0)
-                ini.main.transparency = transparency[0]
-                inicfg.save(ini, IniFilename)
-            end
-            imgui.TextDisabled(u8"1.0 - непрозрачный, 0.3 - сильно прозрачный")
-        elseif themeIndex == 1 then
-            imgui.Separator()
-            imgui.Text(u8"Настройка кастомных цветов:")
-
-            local changed = false
-            if imgui.ColorEdit4("Левая панель", customLeft, imgui.ColorEditFlags.NoInputs + imgui.ColorEditFlags.NoLabel) then
-                changed = true
-            end
-            imgui.SameLine()
-            imgui.Text(u8"Левая панель")
-
-            if imgui.ColorEdit4("Правая панель", customRight, imgui.ColorEditFlags.NoInputs + imgui.ColorEditFlags.NoLabel) then
-                changed = true
-            end
-            imgui.SameLine()
-            imgui.Text(u8"Правая панель")
-
-            if imgui.ColorEdit4("Дочерняя панель", customChild, imgui.ColorEditFlags.NoInputs + imgui.ColorEditFlags.NoLabel) then
-                changed = true
-            end
-            imgui.SameLine()
-            imgui.Text(u8"Дочерняя панель")
-
-            if imgui.ColorEdit4("Цвет наведения", customHover, imgui.ColorEditFlags.NoInputs + imgui.ColorEditFlags.NoLabel) then
-                changed = true
-            end
-            imgui.SameLine()
-            imgui.Text(u8"Цвет наведения")
-
-            if changed then
-                ini.main.customLeftR = customLeft[0]
-                ini.main.customLeftG = customLeft[1]
-                ini.main.customLeftB = customLeft[2]
-                ini.main.customLeftA = customLeft[3]
-                ini.main.customRightR = customRight[0]
-                ini.main.customRightG = customRight[1]
-                ini.main.customRightB = customRight[2]
-                ini.main.customRightA = customRight[3]
-                ini.main.customChildR = customChild[0]
-                ini.main.customChildG = customChild[1]
-                ini.main.customChildB = customChild[2]
-                ini.main.customChildA = customChild[3]
-                ini.main.customHoverR = customHover[0]
-                ini.main.customHoverG = customHover[1]
-                ini.main.customHoverB = customHover[2]
-                ini.main.customHoverA = customHover[3]
-                inicfg.save(ini, IniFilename)
-                applyTheme(1)
-            end
+        imgui.Separator()
+        imgui.Text(u8"Прозрачность фона (для обеих тем):")
+        if imgui.SliderFloat("##transparency", transparency, 0.3, 1.0, "%.2f") then
+            applyTheme(currentTheme[0])  -- применяем текущую тему с новой прозрачностью
+            ini.main.transparency = transparency[0]
+            inicfg.save(ini, IniFilename)
         end
+        imgui.TextDisabled(u8"1.0 - непрозрачный, 0.3 - сильно прозрачный")
     end
     imgui.EndChild()
     imgui.PopStyleColor()
@@ -644,7 +584,7 @@ function checkPauseAndDisableAutoStart()
     end
 end
 
--- ИСПРАВЛЕННАЯ ВКЛАДКА "ИНФОРМАЦИЯ" (убраны строки с временем работы и ником)
+-- Вкладка "Информация" (без изменений, но использует общие цвета)
 function drawInfoTab(panelColor)
     panelColor = panelColor or colors.childPanelColor
     imgui.Text(emoji('star') .. u8" RepFlow  /  " .. emoji('circle_info') .. u8" Информация")
@@ -832,4 +772,3 @@ end)
 
 function showInfoWindow() info_window_state[0] = true end
 function showInfoWindowOff() info_window_state[0] = false end
-
