@@ -21,7 +21,7 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.17 | Premium"   -- версия без FontAwesome
+local scriptver = "4.18 | Premium"   -- версия без FontAwesome
 
 local scriptStartTime = os.clock()
 
