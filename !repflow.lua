@@ -5,28 +5,30 @@ local vkeys = require 'vkeys'
 local encoding = require 'encoding'
 local inicfg = require 'inicfg'
 local ffi = require 'ffi'
+local bit = require 'bit'   -- для побитовых операций
 
--- ИСПРАВЛЕНИЕ ОШИБКИ u8: Инициализируем кодировку до её использования
 encoding.default = 'CP1251'
 u8 = encoding.UTF8
 
--- === НАСТРОЙКИ ОБНОВЛЕНИЯ (ВСТАВЬ СВОИ RAW ССЫЛКИ) ===
+-- === НАСТРОЙКИ ОБНОВЛЕНИЯ ===
 local UPDATE_URL = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/update.json"
 local SCRIPT_URL = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/%21repflow.lua"
 local update_found = false
 local update_status = u8"Проверка не проводилась"
--- ====================================================
+-- =============================
 
 if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.15 | Premium"
+local scriptver = "4.15 | Premium"   -- исправленная версия
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.13 | Premium", description = "- Удалена кастомная тема, добавлена чёрная тема.\n- Уменьшен размер главного окна до 600x400." },  -- новая запись
+    { version = "4.15 | Premium", description = "- Исправлена ошибка 'invalid escape sequence' при использовании FontAwesome (заменены \\u-последовательности на корректную генерацию UTF-8)." },
+    { version = "4.14 | Premium", description = "- Добавлена поддержка FontAwesome 6 (иконки в меню).\n- Требуется файл 'fa-solid-900.ttf' в папке со скриптом." },
+    { version = "4.13 | Premium", description = "- Удалена кастомная тема, добавлена чёрная тема.\n- Уменьшен размер главного окна до 600x400." },
     { version = "4.12 | Premium", description = "- Добавлена функция автообновления скрипта, теперь не нужно заново переустанавливать скрипт." },
     { version = "4.11 | Premium", description = "- Убраны строки 'Время работы' и 'Ваш ник' во вкладке 'Информация'." },
     { version = "4.10 | Premium", description = "- Убрана полоса прокрутки в окне информации, увеличен размер окна." },
@@ -83,12 +85,48 @@ local hideFloodMsg = new.bool(true)
 local my_nick_cp1251 = "Игрок"
 local my_nick_utf8 = u8"Игрок"
 
+-- ========== ПОДДЕРЖКА FONTAWESOME 6 (исправлено) ==========
+local fontAwesomeLoaded = false
+local faPath = getWorkingDirectory() .. "\\fa-solid-900.ttf"
+
+-- Функция для преобразования кода Unicode в UTF-8 строку
+local function unicode_char(code)
+    if code <= 0x7F then
+        return string.char(code)
+    elseif code <= 0x7FF then
+        return string.char(0xC0 + bit.rshift(code, 6),
+                           0x80 + bit.band(code, 0x3F))
+    elseif code <= 0xFFFF then
+        return string.char(0xE0 + bit.rshift(code, 12),
+                           0x80 + bit.band(bit.rshift(code, 6), 0x3F),
+                           0x80 + bit.band(code, 0x3F))
+    else
+        return "?"
+    end
+end
+
+local faIcons = {
+    gear      = unicode_char(0xF013),
+    message   = unicode_char(0xF27A),
+    floppy_disk = unicode_char(0xF0C7),
+    sliders   = unicode_char(0xF1DE),
+    palette   = unicode_char(0xF53F),
+    star      = unicode_char(0xF005),
+    circle_info = unicode_char(0xF05A),
+    bolt      = unicode_char(0xF0E7),
+}
+
+local function icon(name)
+    return faIcons[name] or ""
+end
+-- ==========================================================
+
 -- ФУНКЦИИ ОБНОВЛЕНИЯ
 function checkUpdates()
     update_status = u8"Проверка наличия обновлений..."
     local path = getWorkingDirectory() .. '\\repflow_upd.json'
     downloadUrlToFile(UPDATE_URL, path, function(id, status, p1, p2)
-        if status == 58 then -- STATUS_ENDDOWNLOADDATA
+        if status == 58 then
             local f = io.open(path, 'r')
             if f then
                 local content = f:read('*a')
@@ -122,8 +160,6 @@ function updateScript()
 end
 
 -- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-local function emoji(name) return "" end
-
 local function formatTime(seconds)
     local h = math.floor(seconds / 3600)
     local m = math.floor((seconds % 3600) / 60)
@@ -136,14 +172,13 @@ local function getPlayerName()
     if name and name ~= "" then my_nick_utf8 = u8(name) end
 end
 
--- Загрузка ini (убраны поля кастомных цветов, уменьшен размер окна по умолчанию)
 local ini = inicfg.load({
     main = {
         keyBind = "0x5A", keyBindName = 'Z', otInterval = 10, useMilliseconds = false,
         theme = 0, transparency = 0.8, dialogTimeout = 600, dialogHandlerEnabled = true,
         autoStartEnabled = true, otklflud = false,
     },
-    widget = { posX = 400, posY = 400, sizeX = 600, sizeY = 400 }  -- уменьшенный размер
+    widget = { posX = 400, posY = 400, sizeX = 600, sizeY = 400 }
 }, IniFilename)
 
 local MoveWidget = false
@@ -166,10 +201,9 @@ local currentTheme = new.int(themeValue)
 
 local transparency = new.float(ini.main.transparency or 0.8)
 
--- Функция применения темы (Прозрачная и Чёрная)
 local colors = {}
 local function applyTheme(themeIndex)
-    if themeIndex == 0 then  -- Прозрачная
+    if themeIndex == 0 then
         colors = {
             leftPanelColor = imgui.ImVec4(27/255,20/255,30/255,transparency[0]),
             rightPanelColor = imgui.ImVec4(24/255,18/255,28/255,transparency[0]),
@@ -177,7 +211,7 @@ local function applyTheme(themeIndex)
             hoverColor = imgui.ImVec4(63/255,59/255,66/255,transparency[0]),
             textColor = imgui.ImVec4(1,1,1,1),
         }
-    else  -- Чёрная тема
+    else
         colors = {
             leftPanelColor = imgui.ImVec4(0,0,0,transparency[0]),
             rightPanelColor = imgui.ImVec4(0,0,0,transparency[0]),
@@ -190,15 +224,6 @@ end
 applyTheme(currentTheme[0])
 
 local lastWindowSize = nil
-
-local function formatTime(seconds)
-    local h = math.floor(seconds / 3600)
-    local m = math.floor((seconds % 3600) / 60)
-    local s = math.floor(seconds % 60)
-    return string.format("%02d:%02d:%02d", h, m, s)
-end
-
-local function emoji(name) return "" end
 
 function main()
     if not isSampLoaded() or not isSampfuncsLoaded() then return end
@@ -310,9 +335,22 @@ function startMovingWindow()
     sampAddChatMessage(taginf .. '{FFFF00}Режим перемещения окна активирован. Нажмите "Пробел" для подтверждения.', -1)
 end
 
+-- Загрузка шрифтов (добавлен FontAwesome)
 imgui.OnInitialize(function()
-    imgui.GetIO().IniFilename = nil
-    imgui.GetIO().Fonts:AddFontDefault()
+    local io = imgui.GetIO()
+    io.IniFilename = nil
+    
+    -- Загружаем основной шрифт
+    local defaultFont = io.Fonts:AddFontDefault()
+    
+    -- Пытаемся загрузить FontAwesome
+    local faFont = io.Fonts:AddFontFromFileTTF(faPath, 16.0, nil, io.Fonts:GetGlyphRangesDefault())
+    if faFont then
+        fontAwesomeLoaded = true
+    else
+        sampAddChatMessage(tag .. "{FF0000}Шрифт FontAwesome не найден. Иконки не будут отображаться.", -1)
+    end
+    
     decor()
 end)
 
@@ -397,9 +435,9 @@ function cmd_arep(arg)
     imgui.Process = main_window_state[0]
 end
 
--- Функции отрисовки вкладок
+-- Функции отрисовки вкладок (с использованием icon())
 function drawMainTab()
-    imgui.Text(emoji('gear') .. u8" Настройки  /  " .. emoji('message') .. u8" Флудер")
+    imgui.Text(icon('gear') .. u8" Настройки  /  " .. icon('message') .. u8" Флудер")
     imgui.Separator()
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
     if imgui.BeginChild("Flooder", imgui.ImVec2(0,150), true) then
@@ -414,7 +452,7 @@ function drawMainTab()
         imgui.PushItemWidth(45)
         imgui.InputText(u8'##otIntervalInput', otIntervalBuffer, ffi.sizeof(otIntervalBuffer))
         imgui.SameLine()
-        if imgui.Button(emoji('floppy_disk') .. u8" Сохранить интервал") then
+        if imgui.Button(icon('floppy_disk') .. u8" Сохранить интервал") then
             local newValue = tonumber(ffi.string(otIntervalBuffer))
             if newValue then
                 otInterval[0] = newValue
@@ -440,7 +478,7 @@ function drawMainTab()
 end
 
 function drawSettingsTab()
-    imgui.Text(emoji('gear') .. u8" Настройки  /  " .. emoji('sliders') .. u8" Основные настройки")
+    imgui.Text(icon('gear') .. u8" Настройки  /  " .. icon('sliders') .. u8" Основные настройки")
     imgui.Separator()
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
     if imgui.BeginChild("KeyBind", imgui.ImVec2(0,60), true) then
@@ -480,7 +518,7 @@ function drawSettingsTab()
         imgui.Text(u8'Текущий тайм-аут: ' .. dialogTimeout[0] .. u8' секунд')
         imgui.InputText(u8'', dialogTimeoutBuffer, ffi.sizeof(dialogTimeoutBuffer))
         imgui.SameLine()
-        if imgui.Button(emoji('floppy_disk') .. u8" Сохранить тайм-аут") then
+        if imgui.Button(icon('floppy_disk') .. u8" Сохранить тайм-аут") then
             local newValue = tonumber(ffi.string(dialogTimeoutBuffer))
             if newValue and newValue >= 1 and newValue <= 9999 then
                 dialogTimeout[0] = newValue
@@ -508,9 +546,8 @@ function drawSettingsTab()
     imgui.PopStyleColor()
 end
 
--- Обновлённая вкладка тем (только Прозрачная и Чёрная, слайдер прозрачности для обеих)
 function drawThemesTab()
-    imgui.Text(emoji('palette') .. u8" Темы")
+    imgui.Text(icon('palette') .. u8" Темы")
     imgui.Separator()
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
     if imgui.BeginChild("Themes", imgui.ImVec2(0,250), true) then
@@ -536,7 +573,7 @@ function drawThemesTab()
         imgui.Separator()
         imgui.Text(u8"Прозрачность фона (для обеих тем):")
         if imgui.SliderFloat("##transparency", transparency, 0.3, 1.0, "%.2f") then
-            applyTheme(currentTheme[0])  -- применяем текущую тему с новой прозрачностью
+            applyTheme(currentTheme[0])
             ini.main.transparency = transparency[0]
             inicfg.save(ini, IniFilename)
         end
@@ -584,10 +621,9 @@ function checkPauseAndDisableAutoStart()
     end
 end
 
--- Вкладка "Информация" (без изменений, но использует общие цвета)
 function drawInfoTab(panelColor)
     panelColor = panelColor or colors.childPanelColor
-    imgui.Text(emoji('star') .. u8" RepFlow  /  " .. emoji('circle_info') .. u8" Информация")
+    imgui.Text(icon('star') .. u8" RepFlow  /  " .. icon('circle_info') .. u8" Информация")
     imgui.Separator()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, panelColor)
@@ -620,7 +656,7 @@ function drawInfoTab(panelColor)
 end
 
 function drawChangeLogTab()
-    imgui.Text(emoji('star') .. u8" RepFlow  /  " .. emoji('bolt') .. u8" ChangeLog")
+    imgui.Text(icon('star') .. u8" RepFlow  /  " .. icon('bolt') .. u8" ChangeLog")
     imgui.Separator()
 
     for _, entry in ipairs(changelogEntries) do
@@ -635,7 +671,7 @@ imgui.OnFrame(function() return main_window_state[0] end, function()
     imgui.SetNextWindowPos(imgui.ImVec2(sw/2, sh/2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5,0.5))
     imgui.PushStyleColor(imgui.Col.WindowBg, colors.rightPanelColor)
 
-    if imgui.Begin(emoji('bolt') .. u8' RepFlow | Premium', main_window_state, imgui.WindowFlags.NoCollapse) then
+    if imgui.Begin(icon('bolt') .. u8' RepFlow | Premium', main_window_state, imgui.WindowFlags.NoCollapse) then
 
         imgui.PushStyleColor(imgui.Col.ChildBg, colors.leftPanelColor)
         if imgui.BeginChild("left_panel", imgui.ImVec2(130,-1), false) then
@@ -737,7 +773,7 @@ function show_arz_notify(type, title, text, time)
     end
 end
 
--- Окно информации (без изменений)
+-- Окно информации
 imgui.OnFrame(function() return info_window_state[0] end, function(self)
     self.HideCursor = true
     local windowWidth = 240
@@ -745,7 +781,7 @@ imgui.OnFrame(function() return info_window_state[0] end, function(self)
     imgui.SetNextWindowSize(imgui.ImVec2(windowWidth, windowHeight), imgui.Cond.FirstUseEver)
     imgui.SetNextWindowPos(imgui.ImVec2(ini.widget.posX, ini.widget.posY), imgui.Cond.Always)
 
-    imgui.Begin(emoji('star') .. u8" | Информация ", info_window_state, 
+    imgui.Begin(icon('star') .. u8" | Информация ", info_window_state, 
                 imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoInputs)
 
     imgui.CenterText(u8'Статус Ловли: Включена')
@@ -772,5 +808,3 @@ end)
 
 function showInfoWindow() info_window_state[0] = true end
 function showInfoWindowOff() info_window_state[0] = false end
-
-
