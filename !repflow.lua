@@ -6,10 +6,18 @@ local encoding = require 'encoding'
 local inicfg = require 'inicfg'
 local ffi = require 'ffi'
 
--- Настройка кодировок: для преобразования UTF-8 -> CP1251 (в чат) и обратно
+-- Настройка кодировок: по умолчанию CP1251 (для чата)
 encoding.default = 'CP1251'
-local toCP1251 = encoding.CP1251.encode   -- функция для перекодировки UTF-8 -> CP1251
-local fromCP1251 = encoding.UTF8           -- функция для CP1251 -> UTF-8 (но мы её используем только для ника)
+
+-- Функции перекодировки
+-- UTF-8 -> CP1251 (для отправки в чат)
+local function toCP1251(utf8_str)
+    return encoding.UTF8:decode(utf8_str)
+end
+-- CP1251 -> UTF-8 (для отображения в меню)
+local function toUTF8(cp1251_str)
+    return encoding.UTF8:encode(cp1251_str)
+end
 
 -- === НАСТРОЙКИ ОБНОВЛЕНИЯ ===
 local UPDATE_URL = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/update.json"
@@ -22,18 +30,17 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.23 | Premium"
+local scriptver = "4.24 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.23 | Premium", description = "- Исправлены кракозябры в чате (добавлена перекодировка UTF-8 -> CP1251).\n- Исправлена работа фильтра 'Не флуди'." },
-    { version = "4.22 | Premium", description = "- Возвращена библиотека encoding для перекодировок.\n- Исправлено отображение ника и сообщений в чате." },
-    { version = "4.21 | Premium", description = "- Добавлена ручная перекодировка ника, удалена encoding." },
+    { version = "4.24 | Premium", description = "- Исправлена ошибка 'encoding.CP1251 is nil' (правильное использование encoding.UTF8:decode/encode)." },
+    { version = "4.23 | Premium", description = "- Исправлены кракозябры в чате и фильтр 'Не флуди'." },
+    { version = "4.22 | Premium", description = "- Возвращена библиотека encoding для перекодировок." },
+    { version = "4.21 | Premium", description = "- Добавлена ручная перекодировка ника." },
     { version = "4.20 | Premium", description = "- Исправлена ошибка 'sampGetCurrentPlayerName'." },
     { version = "4.19 | Premium", description = "- Исправлена ошибка 'update_status nil'." },
-    { version = "4.18 | Premium", description = "- Полностью удалена поддержка FontAwesome." },
-    { version = "4.17 | Premium", description = "- Убраны иконки, оставлены текстовые заглушки." },
 }
 
 local keyBind = 0x5A
@@ -141,7 +148,7 @@ local function getPlayerName()
         name = samp.get_current_player_name()
     end
     if name and name ~= "" then
-        my_nick_utf8 = fromCP1251(name)  -- преобразуем из CP1251 в UTF-8
+        my_nick_utf8 = toUTF8(name)  -- преобразуем из CP1251 в UTF-8
     else
         my_nick_utf8 = "Игрок"
     end
@@ -614,6 +621,7 @@ function drawInfoTab(panelColor)
     if imgui.BeginChild("Info3", imgui.ImVec2(0,110), true) then
         imgui.CenterText("Благодарности:")
         imgui.Text("Тестер: Arman_Carukjan")
+        imgui.Text("Тестер: Sora_Deathmarried")
     end
     imgui.EndChild()
     imgui.PopStyleColor()
