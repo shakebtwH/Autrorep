@@ -6,53 +6,113 @@ local encoding = require 'encoding'
 local inicfg = require 'inicfg'
 local ffi = require 'ffi'
 
+if not samp then samp = {} end
+
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "3.12 | Premium"
+local scriptver = "4.12 | Premium"
 
--- Настройки GitHub (ЗАМЕНИТЕ НА ВАШИ)
-local GITHUB_USER = "MatthewMcLaren"
-local GITHUB_REPO = "repflow"
-local GITHUB_BRANCH = "main" -- или master
-local GITHUB_RAW = string.format("https://raw.githubusercontent.com/shakebtwH/Autrorep/refs/heads/main/update.ini", GITHUB_USER, GITHUB_REPO, GITHUB_BRANCH)
+---------------------------
+-- AUTO UPDATE SYSTEM
+---------------------------
 
--- Имена файлов в репозитории
-local VERSION_FILE = "version.txt"       -- файл, содержащий версию (например, "3.12 | Premium")
-local SCRIPT_FILE = "repflow.lua"        -- файл скрипта (должен называться так же, как в репозитории)
+local AUTO_UPDATE = true
+local UPDATE_PREFIX = "[RepFlow Update]: "
 
--- Флаг наличия HTTPS библиотеки
-local has_https = pcall(require, 'ssl.https')
+local GITHUB_VERSION_URL = "https://raw.githubusercontent.com/USERNAME/REPO/main/version.txt"
+local GITHUB_SCRIPT_URL  = "https://raw.githubusercontent.com/USERNAME/REPO/main/repflow.lua"
 
--- Информация об обновлениях
-local updateInfo = {
-    available = false,
-    latestVersion = "",
-    description = "",
-    error = nil
-}
-local checkingUpdates = false
-local downloading = false
+local function getCurrentVersionNumber()
+    local version = scriptver:match("(%d+%.%d+)")
+    return tonumber(version) or 0
+end
+
+local function checkForUpdate(manual)
+    if not AUTO_UPDATE then return end
+
+    sampAddChatMessage(UPDATE_PREFIX .. "РџСЂРѕРІРµСЂРєР° РѕР±РЅРѕРІР»РµРЅРёР№...", -1)
+
+    downloadUrlToFile(GITHUB_VERSION_URL, getWorkingDirectory() .. "\\repflow_version.txt",
+        function(id, status)
+            if status == dlstatus.STATUS_ENDDOWNLOADDATA then
+                local f = io.open(getWorkingDirectory() .. "\\repflow_version.txt", "r")
+                if not f then 
+                    sampAddChatMessage(UPDATE_PREFIX .. "РћС€РёР±РєР° С‡С‚РµРЅРёСЏ version.txt", -1)
+                    return 
+                end
+
+                local remoteVersion = tonumber(f:read("*a"))
+                f:close()
+                os.remove(getWorkingDirectory() .. "\\repflow_version.txt")
+
+                if not remoteVersion then
+                    sampAddChatMessage(UPDATE_PREFIX .. "РќРµРєРѕСЂСЂРµРєС‚РЅР°СЏ РІРµСЂСЃРёСЏ РЅР° СЃРµСЂРІРµСЂРµ.", -1)
+                    return
+                end
+
+                local currentVersion = getCurrentVersionNumber()
+
+                if remoteVersion > currentVersion then
+                    sampAddChatMessage(UPDATE_PREFIX .. 
+                        string.format("Р”РѕСЃС‚СѓРїРЅРѕ РѕР±РЅРѕРІР»РµРЅРёРµ! %.2f -> %.2f", currentVersion, remoteVersion), -1)
+
+                    downloadUrlToFile(GITHUB_SCRIPT_URL,
+                        thisScript().path .. ".new",
+                        function(id2, status2)
+                            if status2 == dlstatus.STATUS_ENDDOWNLOADDATA then
+                                local newFile = io.open(thisScript().path .. ".new", "r")
+                                if newFile then
+                                    local size = newFile:seek("end")
+                                    newFile:close()
+
+                                    if size and size > 1000 then
+                                        os.remove(thisScript().path)
+                                        os.rename(thisScript().path .. ".new", thisScript().path)
+
+                                        sampAddChatMessage(UPDATE_PREFIX .. 
+                                            "РЎРєСЂРёРїС‚ РѕР±РЅРѕРІР»С‘РЅ! РџРµСЂРµР·Р°РїСѓСЃРє...", -1)
+                                        wait(1000)
+                                        thisScript():reload()
+                                    else
+                                        sampAddChatMessage(UPDATE_PREFIX .. 
+                                            "РћС€РёР±РєР°: С„Р°Р№Р» РїРѕРІСЂРµР¶РґС‘РЅ.", -1)
+                                        os.remove(thisScript().path .. ".new")
+                                    end
+                                end
+                            end
+                        end
+                    )
+                else
+                    if manual then
+                        sampAddChatMessage(UPDATE_PREFIX .. "РЈ РІР°СЃ РїРѕСЃР»РµРґРЅСЏСЏ РІРµСЂСЃРёСЏ.", -1)
+                    end
+                end
+            end
+        end
+    )
+end
+
+local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "3.12 | Premium", description = "- Упрощено автообновление через GitHub (без JSON, используется raw)." },
-    { version = "3.11 | Premium", description = "- Добавлено автообновление через GitHub (проверка и установка последнего релиза).\n- Требуется библиотека json/dkjson и ssl.https." },
-    { version = "3.10 | Premium", description = "- Вкладка 'Обновления' теперь временно неактивна (в разработке).\n- Исправлено отображение текущей темы при некорректном значении в конфиге." },
-    { version = "3.9 | Premium", description = "- Добавлена вкладка 'Обновления' с автоматической проверкой и установкой новой версии.\n- Исправлено отображение текущей темы на вкладке 'Темы'." },
-    { version = "3.8 | Premium", description = "- Добавлена вкладка 'Темы' с тремя цветовыми схемами: Чёрная, Белая, Красная." },
-    { version = "3.7 | Premium", description = "- Исправлена совместимость со старыми версиями mimgui (убраны флаги фокуса)." },
-    { version = "3.6 | Premium", description = "- Исправлено перемещение и изменение размера главного окна (убран лишний сброс ввода)." },
-    { version = "3.5 | Premium", description = "- Исправлено перемещение и изменение размера главного окна (перенесён resetIO)." },
-    { version = "3.4 | Premium", description = "- Добавлена возможность изменять размер главного окна (перетаскиванием за края). Размер сохраняется в конфиг." },
-    { version = "3.3 | Premium", description = "- Исправлено: при нажатии клавиши активации больше не появляется курсор (окно информации теперь не перехватывает ввод)." },
-    { version = "3.2 | Premium", description = "- Исправлена ошибка с иконками (убрана зависимость от fAwesome6).\n- Исправлено: при закрытии окна крестиком курсор больше не остаётся на экране." },
-    { version = "3.1 | Premium", description = "- Новый стиль меню.\n- ChangeLog теперь разделён на две версии.\n\nHF-1.0: Исправлены грамматические ошибки\n\nHF-1.1: Налажен цвет плиток\n- Исправлены грамматические ошибки." },
+    { version = "4.12 | Premium", description = "- Р”РѕР±Р°РІР»РµРЅ С‚РµСЃС‚РµСЂ Sora_Deathmarried СЃ РїРѕРјРµС‚РєРѕР№ (Р»РѕС…) РІ Р±Р»Р°РіРѕРґР°СЂРЅРѕСЃС‚Рё." },
+    { version = "4.11 | Premium", description = "- РЈР±СЂР°РЅС‹ СЃС‚СЂРѕРєРё 'Р’СЂРµРјСЏ СЂР°Р±РѕС‚С‹' Рё 'Р’Р°С€ РЅРёРє' РІРѕ РІРєР»Р°РґРєРµ 'РРЅС„РѕСЂРјР°С†РёСЏ'." },
+    { version = "4.10 | Premium", description = "- РЈР±СЂР°РЅР° РїРѕР»РѕСЃР° РїСЂРѕРєСЂСѓС‚РєРё РІ РѕРєРЅРµ РёРЅС„РѕСЂРјР°С†РёРё, СѓРІРµР»РёС‡РµРЅ СЂР°Р·РјРµСЂ РѕРєРЅР°." },
+    { version = "4.9 | Premium", description = "- Р’ РѕРєРЅРµ РёРЅС„РѕСЂРјР°С†РёРё РїСЂРё РІРєР»СЋС‡С‘РЅРЅРѕР№ Р»РѕРІР»Рµ С‚РµРїРµСЂСЊ РїРѕРєР°Р·С‹РІР°РµС‚СЃСЏ С‚РѕР»СЊРєРѕ СЃС‚Р°С‚СѓСЃ, РІСЂРµРјСЏ СЂР°Р±РѕС‚С‹ С‚РµРєСѓС‰РµР№ СЃРµСЃСЃРёРё Рё СЃС‡С‘С‚С‡РёРє РѕС‚РІРµС‡РµРЅРЅС‹С… СЂРµРїРѕСЂС‚РѕРІ." },
+    { version = "4.8 | Premium", description = "- РСЃРїСЂР°РІР»РµРЅР° РѕС€РёР±РєР° СЃ РєРѕСЂСѓС‚РёРЅР°РјРё (РґРѕР±Р°РІР»РµРЅС‹ Р·Р°С‰РёС‚РЅС‹Рµ РїСЂРѕРІРµСЂРєРё)." },
+    { version = "4.7 | Premium", description = "- Р¤РёРЅР°Р»СЊРЅР°СЏ СЃС‚Р°Р±РёР»СЊРЅР°СЏ РІРµСЂСЃРёСЏ Р±РµР· С„РѕРЅР° Рё Р»РёС€РЅРёС… Р·Р°РІРёСЃРёРјРѕСЃС‚РµР№." },
+    { version = "4.6 | Premium", description = "- Р”РѕР±Р°РІР»РµРЅР° РІРѕР·РјРѕР¶РЅРѕСЃС‚СЊ СѓСЃС‚Р°РЅРѕРІРёС‚СЊ СЃРІРѕС‘ РёР·РѕР±СЂР°Р¶РµРЅРёРµ РЅР° Р·Р°РґРЅРёР№ С„РѕРЅ РіР»Р°РІРЅРѕРіРѕ РѕРєРЅР°." },
+    { version = "4.5 | Premium", description = "- РСЃРїСЂР°РІР»РµРЅ РєСЂР°С€ РїСЂРё РѕС‚РєСЂС‹С‚РёРё РјРµРЅСЋ (СѓР±СЂР°РЅР° Р·Р°РіСЂСѓР·РєР° РІРЅРµС€РЅРµРіРѕ С€СЂРёС„С‚Р°)." },
+    { version = "4.4 | Premium", description = "- Р”РѕР±Р°РІР»РµРЅР° РїРѕРґРґРµСЂР¶РєР° Р»РѕРєР°Р»СЊРЅРѕРіРѕ С€СЂРёС„С‚Р° СЃ СЌРјРѕРґР·Рё (NotoColorEmoji.ttf)." },
+    { version = "4.3 | Premium", description = "- Р”РѕР±Р°РІР»РµРЅР° РїРѕРґРґРµСЂР¶РєР° СЌРјРѕРґР·Рё С‡РµСЂРµР· СЃРёСЃС‚РµРјРЅС‹Рµ С€СЂРёС„С‚С‹." },
+    { version = "4.2 | Premium", description = "- РЈРґР°Р»РµРЅР° РІРєР»Р°РґРєР° 'РЎС‚Р°С‚РёСЃС‚РёРєР°', СЃРєСЂРёРїС‚ РїСЂРёРІРµРґС‘РЅ Рє РјРёРЅРёРјР°Р»РёСЃС‚РёС‡РЅРѕРјСѓ РІРёРґСѓ." },
+    { version = "4.1 | Premium", description = "- РЈРґР°Р»РµРЅС‹ СЃС‚Р°С‚РёС‡РµСЃРєРёРµ С‚РµРјС‹, РѕСЃС‚Р°РІР»РµРЅС‹ С‚РѕР»СЊРєРѕ 'РџСЂРѕР·СЂР°С‡РЅР°СЏ' Рё 'РљР°СЃС‚РѕРјРЅР°СЏ'.\n- РСЃРїСЂР°РІР»РµРЅР° РѕС€РёР±РєР° СЃ PlotHistogram." },
+    { version = "4.0 | Premium", description = "- РЈРґР°Р»РµРЅРѕ РїСЂРёРІРµС‚СЃС‚РІРёРµ.\n- Р”РѕР±Р°РІР»РµРЅР° РІРєР»Р°РґРєР° 'РЎС‚Р°С‚РёСЃС‚РёРєР°'." },
 }
 
 local keyBind = 0x5A
 local keyBindName = 'Z'
 
-local lastDialogId = nil
-local reportActive = false
 local lastOtTime = 0
 local active = false
 local otInterval = new.int(10)
@@ -66,7 +126,7 @@ local info_window_state = new.bool(false)
 local active_tab = new.int(0)
 local sw, sh = getScreenResolution()
 local tag = "{1E90FF} [RepFlow]: {FFFFFF}"
-local taginf = "{1E90FF} [Информация]: {FFFFFF}"
+local taginf = "{1E90FF} [РРЅС„РѕСЂРјР°С†РёСЏ]: {FFFFFF}"
 
 local startTime = 0
 local gameMinimized = false
@@ -75,6 +135,9 @@ local afkExitTime = 0
 local afkCooldown = 30
 local disableAutoStartOnToggle = false
 local changingKey = false
+
+local isDraggingInfo = false
+local dragOffsetX, dragOffsetY = 0, 0
 
 encoding.default = 'CP1251'
 u8 = encoding.UTF8
@@ -86,7 +149,18 @@ local autoStartEnabled = new.bool(true)
 local dialogHandlerEnabled = new.bool(true)
 local hideFloodMsg = new.bool(true)
 
--- Загрузка конфигурации
+local my_nick_cp1251 = "РРіСЂРѕРє"
+local my_nick_utf8 = u8"РРіСЂРѕРє"
+
+local function getPlayerName()
+    local name = samp.get_current_player_name and samp.get_current_player_name()
+    if not name and sampGetPlayerName then name = sampGetPlayerName(0) end
+    if name and name ~= "" then
+        my_nick_cp1251 = name
+        my_nick_utf8 = u8(name)
+    end
+end
+
 local ini = inicfg.load({
     main = {
         keyBind = string.format("0x%X", keyBind),
@@ -94,21 +168,20 @@ local ini = inicfg.load({
         otInterval = 10,
         useMilliseconds = false,
         theme = 0,
+        transparency = 0.8,
         dialogTimeout = 600,
         dialogHandlerEnabled = true,
         autoStartEnabled = true,
         otklflud = false,
+        customLeftR = 27/255, customLeftG = 20/255, customLeftB = 30/255, customLeftA = 1,
+        customRightR = 24/255, customRightG = 18/255, customRightB = 28/255, customRightA = 1,
+        customChildR = 18/255, customChildG = 13/255, customChildB = 22/255, customChildA = 1,
+        customHoverR = 63/255, customHoverG = 59/255, customHoverB = 66/255, customHoverA = 1,
     },
-    widget = {
-        posX = 400,
-        posY = 400,
-        sizeX = 800,
-        sizeY = 500,
-    }
+    widget = { posX = 400, posY = 400, sizeX = 800, sizeY = 500 }
 }, IniFilename)
 local MoveWidget = false
 
--- Применение загруженной конфигурации
 keyBind = tonumber(ini.main.keyBind)
 keyBindName = ini.main.keyBindName
 otInterval[0] = tonumber(ini.main.otInterval)
@@ -118,39 +191,37 @@ dialogHandlerEnabled[0] = ini.main.dialogHandlerEnabled
 autoStartEnabled[0] = ini.main.autoStartEnabled or false
 hideFloodMsg[0] = ini.main.otklflud
 
--- Текущая тема
-local currentTheme = new.int(ini.main.theme or 0)
-if currentTheme[0] < 0 or currentTheme[0] > 2 then
-    currentTheme[0] = 0
+local themeValue = tonumber(ini.main.theme)
+if themeValue == nil or themeValue < 0 or themeValue > 1 then
+    themeValue = 0
     ini.main.theme = 0
     inicfg.save(ini, IniFilename)
 end
+local currentTheme = new.int(themeValue)
 
--- Цвета темы
+local transparency = new.float(ini.main.transparency or 0.8)
+
+local customLeft   = new.float[4](tonumber(ini.main.customLeftR)   or 27/255, tonumber(ini.main.customLeftG)   or 20/255, tonumber(ini.main.customLeftB)   or 30/255, tonumber(ini.main.customLeftA)   or 1)
+local customRight  = new.float[4](tonumber(ini.main.customRightR)  or 24/255, tonumber(ini.main.customRightG)  or 18/255, tonumber(ini.main.customRightB)  or 28/255, tonumber(ini.main.customRightA)  or 1)
+local customChild  = new.float[4](tonumber(ini.main.customChildR)  or 18/255, tonumber(ini.main.customChildG)  or 13/255, tonumber(ini.main.customChildB)  or 22/255, tonumber(ini.main.customChildA)  or 1)
+local customHover  = new.float[4](tonumber(ini.main.customHoverR)  or 63/255, tonumber(ini.main.customHoverG)  or 59/255, tonumber(ini.main.customHoverB)  or 66/255, tonumber(ini.main.customHoverA)  or 1)
+
 local colors = {}
-function applyTheme(themeIndex)
-    if themeIndex == 0 then -- Чёрная
+local function applyTheme(themeIndex)
+    if themeIndex == 0 then
         colors = {
-            leftPanelColor = imgui.ImVec4(27/255,20/255,30/255,1),
-            rightPanelColor = imgui.ImVec4(24/255,18/255,28/255,1),
-            childPanelColor = imgui.ImVec4(18/255,13/255,22/255,1),
-            hoverColor = imgui.ImVec4(63/255,59/255,66/255,1),
+            leftPanelColor = imgui.ImVec4(27/255,20/255,30/255,transparency[0]),
+            rightPanelColor = imgui.ImVec4(24/255,18/255,28/255,transparency[0]),
+            childPanelColor = imgui.ImVec4(18/255,13/255,22/255,transparency[0]),
+            hoverColor = imgui.ImVec4(63/255,59/255,66/255,transparency[0]),
             textColor = imgui.ImVec4(1,1,1,1),
         }
-    elseif themeIndex == 1 then -- Белая
+    else
         colors = {
-            leftPanelColor = imgui.ImVec4(240/255,240/255,240/255,1),
-            rightPanelColor = imgui.ImVec4(255/255,255/255,255/255,1),
-            childPanelColor = imgui.ImVec4(230/255,230/255,230/255,1),
-            hoverColor = imgui.ImVec4(200/255,200/255,200/255,1),
-            textColor = imgui.ImVec4(0,0,0,1),
-        }
-    elseif themeIndex == 2 then -- Красная
-        colors = {
-            leftPanelColor = imgui.ImVec4(80/255,20/255,20/255,1),
-            rightPanelColor = imgui.ImVec4(100/255,25/255,25/255,1),
-            childPanelColor = imgui.ImVec4(120/255,30/255,30/255,1),
-            hoverColor = imgui.ImVec4(150/255,40/255,40/255,1),
+            leftPanelColor = imgui.ImVec4(customLeft[0], customLeft[1], customLeft[2], customLeft[3]),
+            rightPanelColor = imgui.ImVec4(customRight[0], customRight[1], customRight[2], customRight[3]),
+            childPanelColor = imgui.ImVec4(customChild[0], customChild[1], customChild[2], customChild[3]),
+            hoverColor = imgui.ImVec4(customHover[0], customHover[1], customHover[2], customHover[3]),
             textColor = imgui.ImVec4(1,1,1,1),
         }
     end
@@ -159,13 +230,30 @@ applyTheme(currentTheme[0])
 
 local lastWindowSize = nil
 
+local function formatTime(seconds)
+    local h = math.floor(seconds / 3600)
+    local m = math.floor((seconds % 3600) / 60)
+    local s = math.floor(seconds % 60)
+    return string.format("%02d:%02d:%02d", h, m, s)
+end
+
+local function emoji(name) return "" end
+
 function main()
     if not isSampLoaded() or not isSampfuncsLoaded() then return end
     while not isSampAvailable() do wait(100) end
     sampRegisterChatCommand("arep", cmd_arep)
 
-    sampAddChatMessage(tag .. 'Скрипт {00FF00}загружен.{FFFFFF} Активация меню: {00FF00}/arep', -1)
-    show_arz_notify('success', 'RepFlow', 'Успешная загрузка. Активация: /arep', 9000)
+    if AUTO_UPDATE then
+    lua_thread.create(function()
+        wait(2000)
+        checkForUpdate(false)
+    end)
+end
+
+    getPlayerName()
+    sampAddChatMessage(tag .. 'РЎРєСЂРёРїС‚ {00FF00}Р·Р°РіСЂСѓР¶РµРЅ.{FFFFFF} РђРєС‚РёРІР°С†РёСЏ РјРµРЅСЋ: {00FF00}/arep', -1)
+    show_arz_notify('success', 'RepFlow', 'РЎРєСЂРёРїС‚ Р·Р°РіСЂСѓР¶РµРЅ. РђРєС‚РёРІР°С†РёСЏ: /arep', 3000)
 
     local prev_main_state = false
 
@@ -175,7 +263,11 @@ function main()
         checkPauseAndDisableAutoStart()
         checkAutoStart()
 
-        imgui.Process = main_window_state[0] and not isGameMinimized
+        if main_window_state[0] and not isGameMinimized then
+            imgui.Process = true
+        else
+            imgui.Process = false
+        end
 
         if main_window_state[0] ~= prev_main_state then
             if main_window_state[0] then
@@ -208,18 +300,40 @@ function main()
             onToggleActive()
         end
 
+        if info_window_state[0] and not MoveWidget then
+            local altPressed = isKeyDown(vkeys.VK_MENU)
+            local mousePressed = imgui.GetIO().MouseDown[0]
+            local mouseX, mouseY = getCursorPos()
+
+            if altPressed and mousePressed and not isDraggingInfo then
+                local winX, winY = ini.widget.posX, ini.widget.posY
+                local winW, winH = 240, active and 120 or 280
+                if mouseX >= winX and mouseX <= winX + winW and mouseY >= winY and mouseY <= winY + 30 then
+                    isDraggingInfo = true
+                    dragOffsetX = mouseX - winX
+                    dragOffsetY = mouseY - winY
+                end
+            end
+
+            if isDraggingInfo then
+                if mousePressed then
+                    ini.widget.posX = mouseX - dragOffsetX
+                    ini.widget.posY = mouseY - dragOffsetY
+                else
+                    isDraggingInfo = false
+                    inicfg.save(ini, IniFilename)
+                end
+            end
+        else
+            isDraggingInfo = false
+        end
+
         if active then
             local currentTime = os.clock() * 1000
-            if useMilliseconds[0] then
-                if currentTime - lastOtTime >= otInterval[0] then
-                    sampSendChat('/ot')
-                    lastOtTime = currentTime
-                end
-            else
-                if (currentTime - lastOtTime) >= (otInterval[0] * 1000) then
-                    sampSendChat('/ot')
-                    lastOtTime = currentTime
-                end
+            local interval = useMilliseconds[0] and otInterval[0] or otInterval[0] * 1000
+            if currentTime - lastOtTime >= interval then
+                sampSendChat('/ot')
+                lastOtTime = currentTime
             end
         else
             startTime = os.clock()
@@ -230,10 +344,8 @@ end
 function resetIO()
     for i = 0, 511 do imgui.GetIO().KeysDown[i] = false end
     for i = 0, 4 do imgui.GetIO().MouseDown[i] = false end
-    imgui.GetIO().KeyCtrl = false
-    imgui.GetIO().KeyShift = false
-    imgui.GetIO().KeyAlt = false
-    imgui.GetIO().KeySuper = false
+    imgui.GetIO().KeyCtrl = false; imgui.GetIO().KeyShift = false
+    imgui.GetIO().KeyAlt = false; imgui.GetIO().KeySuper = false
 end
 
 function startMovingWindow()
@@ -241,7 +353,12 @@ function startMovingWindow()
     showInfoWindow()
     sampToggleCursor(true)
     main_window_state[0] = false
-    sampAddChatMessage(taginf .. '{FFFF00}Режим перемещения окна активирован. Нажмите "Пробел" для подтверждения.', -1)
+    sampAddChatMessage(taginf .. '{FFFF00}Р РµР¶РёРј РїРµСЂРµРјРµС‰РµРЅРёСЏ РѕРєРЅР° Р°РєС‚РёРІРёСЂРѕРІР°РЅ. РќР°Р¶РјРёС‚Рµ "РџСЂРѕР±РµР»" РґР»СЏ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ.', -1)
+end
+
+function cmd_arep(arg)
+    main_window_state[0] = not main_window_state[0]
+    imgui.Process = main_window_state[0]
 end
 
 imgui.OnInitialize(function()
@@ -269,7 +386,7 @@ function decor()
 end
 
 function sampev.onServerMessage(color, text)
-    if text:find('%[(%W+)%] от (%w+_%w+)%[(%d+)%]:') then
+    if text:find('%[(%W+)%] РѕС‚ (%w+_%w+)%[(%d+)%]:') then
         if active then sampSendChat('/ot') end
     end
     return filterFloodMessage(text)
@@ -279,25 +396,25 @@ function onToggleActive()
     active = not active
     manualDisable = not active
     disableAutoStartOnToggle = not active
-    local statusArz = active and 'включена' or 'выключена'
-    show_arz_notify('info', 'RepFlow', 'Ловля ' .. statusArz .. '!', 2000)
+    local statusArz = active and 'РІРєР»СЋС‡РµРЅР°' or 'РІС‹РєР»СЋС‡РµРЅР°'
+    show_arz_notify('info', 'RepFlow', 'Р›РѕРІР»СЏ ' .. statusArz .. '!', 2000)
 end
 
 function saveWindowSettings()
     ini.widget.posX = ini.widget.posX or 400
     ini.widget.posY = ini.widget.posY or 400
     inicfg.save(ini, IniFilename)
-    sampAddChatMessage(taginf .. '{00FF00}Положение окна сохранено!', -1)
+    sampAddChatMessage(taginf .. '{00FF00}РџРѕР»РѕР¶РµРЅРёРµ РѕРєРЅР° СЃРѕС…СЂР°РЅРµРЅРѕ!', -1)
 end
 
 function sampev.onShowDialog(dialogId, style, title, button1, button2, text)
     if dialogId == 1334 then
         lastDialogTime = os.clock()
         reportAnsweredCount = reportAnsweredCount + 1
-        sampAddChatMessage(tag .. '{00FF00}Репорт принят! Отвечено репорта: ' .. reportAnsweredCount, -1)
+        sampAddChatMessage(tag .. '{00FF00}Р РµРїРѕСЂС‚ РїСЂРёРЅСЏС‚! РћС‚РІРµС‡РµРЅРѕ СЂРµРїРѕСЂС‚Р°: ' .. reportAnsweredCount, -1)
         if active then
             active = false
-            show_arz_notify('info', 'RepFlow', 'Ловля отключена из-за окна репорта!', 3000)
+            show_arz_notify('info', 'RepFlow', 'Р›РѕРІР»СЏ РѕС‚РєР»СЋС‡РµРЅР° РёР·-Р·Р° РѕРєРЅР° СЂРµРїРѕСЂС‚Р°!', 3000)
         end
     end
 end
@@ -307,15 +424,12 @@ function checkAutoStart()
     if autoStartEnabled[0] and not active and not gameMinimized and (afkExitTime == 0 or currentTime - afkExitTime >= afkCooldown) then
         if not disableAutoStartOnToggle and (currentTime - lastDialogTime) > dialogTimeout[0] then
             active = true
-            show_arz_notify('info', 'RepFlow', 'Ловля включена по таймауту', 3000)
+            show_arz_notify('info', 'RepFlow', 'Р›РѕРІР»СЏ РІРєР»СЋС‡РµРЅР° РїРѕ С‚Р°Р№РјР°СѓС‚Сѓ', 3000)
         end
     end
 end
 
-function saveSettings()
-    ini.main.dialogTimeout = dialogTimeout[0]
-    inicfg.save(ini, IniFilename)
-end
+function saveSettings() ini.main.dialogTimeout = dialogTimeout[0]; inicfg.save(ini, IniFilename) end
 
 function imgui.Link(link, text)
     text = text or link
@@ -329,38 +443,31 @@ function imgui.Link(link, text)
     DL:AddLine(imgui.ImVec2(p.x, p.y + tSize.y), imgui.ImVec2(p.x + tSize.x, p.y + tSize.y), color)
 end
 
-function cmd_arep(arg)
-    main_window_state[0] = not main_window_state[0]
-    imgui.Process = main_window_state[0]
-end
-
-local function icon(name) return "" end
-
 function drawMainTab()
-    imgui.Text(icon('gear') .. u8" Настройки  /  " .. icon('message') .. u8" Флудер")
+    imgui.Text(emoji('gear') .. u8" РќР°СЃС‚СЂРѕР№РєРё  /  " .. emoji('message') .. u8" Р¤Р»СѓРґРµСЂ")
     imgui.Separator()
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
     if imgui.BeginChild("Flooder", imgui.ImVec2(0,150), true) then
         imgui.PushItemWidth(100)
-        if imgui.Checkbox(u8'Использовать миллисекунды', useMilliseconds) then
+        if imgui.Checkbox(u8'РСЃРїРѕР»СЊР·РѕРІР°С‚СЊ РјРёР»Р»РёСЃРµРєСѓРЅРґС‹', useMilliseconds) then
             ini.main.useMilliseconds = useMilliseconds[0]
             inicfg.save(ini, IniFilename)
         end
         imgui.PopItemWidth()
-        imgui.Text(u8'Интервал отправки команды /ot (' .. (useMilliseconds[0] and u8'в миллисекундах' or u8'в секундах') .. '):')
-        imgui.Text(u8'Текущий интервал: ' .. otInterval[0] .. (useMilliseconds[0] and u8' мс' or u8' секунд'))
+        imgui.Text(u8'РРЅС‚РµСЂРІР°Р» РѕС‚РїСЂР°РІРєРё РєРѕРјР°РЅРґС‹ /ot (' .. (useMilliseconds[0] and u8'РІ РјРёР»Р»РёСЃРµРєСѓРЅРґР°С…' or u8'РІ СЃРµРєСѓРЅРґР°С…') .. '):')
+        imgui.Text(u8'РўРµРєСѓС‰РёР№ РёРЅС‚РµСЂРІР°Р»: ' .. otInterval[0] .. (useMilliseconds[0] and u8' РјСЃ' or u8' СЃРµРєСѓРЅРґ'))
         imgui.PushItemWidth(45)
         imgui.InputText(u8'##otIntervalInput', otIntervalBuffer, ffi.sizeof(otIntervalBuffer))
         imgui.SameLine()
-        if imgui.Button(icon('floppy_disk') .. u8" Сохранить интервал") then
+        if imgui.Button(emoji('floppy_disk') .. u8" РЎРѕС…СЂР°РЅРёС‚СЊ РёРЅС‚РµСЂРІР°Р»") then
             local newValue = tonumber(ffi.string(otIntervalBuffer))
             if newValue then
                 otInterval[0] = newValue
                 ini.main.otInterval = newValue
                 inicfg.save(ini, IniFilename)
-                sampAddChatMessage(taginf .. "Интервал сохранён: {32CD32}" .. newValue .. (useMilliseconds[0] and " мс" or " секунд"), -1)
+                sampAddChatMessage(taginf .. "РРЅС‚РµСЂРІР°Р» СЃРѕС…СЂР°РЅС‘РЅ: {32CD32}" .. newValue .. (useMilliseconds[0] and " РјСЃ" or " СЃРµРєСѓРЅРґ"), -1)
             else
-                sampAddChatMessage(taginf .. "Некорректное значение. {32CD32}Введите число.", -1)
+                sampAddChatMessage(taginf .. "РќРµРєРѕСЂСЂРµРєС‚РЅРѕРµ Р·РЅР°С‡РµРЅРёРµ. {32CD32}Р’РІРµРґРёС‚Рµ С‡РёСЃР»Рѕ.", -1)
             end
         end
         imgui.PopItemWidth()
@@ -370,23 +477,23 @@ function drawMainTab()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
     if imgui.BeginChild("InfoFlooder", imgui.ImVec2(0,65), true) then
-        imgui.Text(u8'Скрипт также ищет надпись в чате [Репорт] от Имя_Фамилия.')
-        imgui.Text(u8'Флудер нужен для дополнительного способа ловли репорта.')
+        imgui.Text(u8'РЎРєСЂРёРїС‚ С‚Р°РєР¶Рµ РёС‰РµС‚ РЅР°РґРїРёСЃСЊ РІ С‡Р°С‚Рµ [Р РµРїРѕСЂС‚] РѕС‚ РРјСЏ_Р¤Р°РјРёР»РёСЏ.')
+        imgui.Text(u8'Р¤Р»СѓРґРµСЂ РЅСѓР¶РµРЅ РґР»СЏ РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅРѕРіРѕ СЃРїРѕСЃРѕР±Р° Р»РѕРІР»Рё СЂРµРїРѕСЂС‚Р°.')
     end
     imgui.EndChild()
     imgui.PopStyleColor()
 end
 
 function drawSettingsTab()
-    imgui.Text(icon('gear') .. u8" Настройки  /  " .. icon('sliders') .. u8" Основные настройки")
+    imgui.Text(emoji('gear') .. u8" РќР°СЃС‚СЂРѕР№РєРё  /  " .. emoji('sliders') .. u8" РћСЃРЅРѕРІРЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё")
     imgui.Separator()
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
     if imgui.BeginChild("KeyBind", imgui.ImVec2(0,60), true) then
-        imgui.Text(u8'Текущая клавиша активации:')
+        imgui.Text(u8'РўРµРєСѓС‰Р°СЏ РєР»Р°РІРёС€Р° Р°РєС‚РёРІР°С†РёРё:')
         imgui.SameLine()
         if imgui.Button(u8'' .. keyBindName) then
             changingKey = true
-            show_arz_notify('info', 'RepFlow', 'Нажмите новую клавишу для активации', 2000)
+            show_arz_notify('info', 'RepFlow', 'РќР°Р¶РјРёС‚Рµ РЅРѕРІСѓСЋ РєР»Р°РІРёС€Сѓ РґР»СЏ Р°РєС‚РёРІР°С†РёРё', 2000)
         end
     end
     imgui.EndChild()
@@ -394,16 +501,16 @@ function drawSettingsTab()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
     if imgui.BeginChild("DialogOptions", imgui.ImVec2(0,150), true) then
-        imgui.Text(u8"Обработка диалогов")
-        if imgui.Checkbox(u8'Обрабатывать диалоги', dialogHandlerEnabled) then
+        imgui.Text(u8"РћР±СЂР°Р±РѕС‚РєР° РґРёР°Р»РѕРіРѕРІ")
+        if imgui.Checkbox(u8'РћР±СЂР°Р±Р°С‚С‹РІР°С‚СЊ РґРёР°Р»РѕРіРё', dialogHandlerEnabled) then
             ini.main.dialogHandlerEnabled = dialogHandlerEnabled[0]
             inicfg.save(ini, IniFilename)
         end
-        if imgui.Checkbox(u8'Автостарт ловли по большому активу', autoStartEnabled) then
+        if imgui.Checkbox(u8'РђРІС‚РѕСЃС‚Р°СЂС‚ Р»РѕРІР»Рё РїРѕ Р±РѕР»СЊС€РѕРјСѓ Р°РєС‚РёРІСѓ', autoStartEnabled) then
             ini.main.autoStartEnabled = autoStartEnabled[0]
             inicfg.save(ini, IniFilename)
         end
-        if imgui.Checkbox(u8'Отключить сообщение "Не флуди"', hideFloodMsg) then
+        if imgui.Checkbox(u8'РћС‚РєР»СЋС‡РёС‚СЊ СЃРѕРѕР±С‰РµРЅРёРµ "РќРµ С„Р»СѓРґРё"', hideFloodMsg) then
             ini.main.otklflud = hideFloodMsg[0]
             inicfg.save(ini, IniFilename)
         end
@@ -413,19 +520,19 @@ function drawSettingsTab()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
     if imgui.BeginChild("AutoStartTimeout", imgui.ImVec2(0,100), true) then
-        imgui.Text(u8'Настройка тайм-аута автостарта')
+        imgui.Text(u8'РќР°СЃС‚СЂРѕР№РєР° С‚Р°Р№Рј-Р°СѓС‚Р° Р°РІС‚РѕСЃС‚Р°СЂС‚Р°')
         imgui.PushItemWidth(45)
-        imgui.Text(u8'Текущий тайм-аут: ' .. dialogTimeout[0] .. u8' секунд')
+        imgui.Text(u8'РўРµРєСѓС‰РёР№ С‚Р°Р№Рј-Р°СѓС‚: ' .. dialogTimeout[0] .. u8' СЃРµРєСѓРЅРґ')
         imgui.InputText(u8'', dialogTimeoutBuffer, ffi.sizeof(dialogTimeoutBuffer))
         imgui.SameLine()
-        if imgui.Button(icon('floppy_disk') .. u8" Сохранить тайм-аут") then
+        if imgui.Button(emoji('floppy_disk') .. u8" РЎРѕС…СЂР°РЅРёС‚СЊ С‚Р°Р№Рј-Р°СѓС‚") then
             local newValue = tonumber(ffi.string(dialogTimeoutBuffer))
             if newValue and newValue >= 1 and newValue <= 9999 then
                 dialogTimeout[0] = newValue
                 saveSettings()
-                sampAddChatMessage(taginf .. "Тайм-аут сохранён: {32CD32}" .. newValue .. " секунд", -1)
+                sampAddChatMessage(taginf .. "РўР°Р№Рј-Р°СѓС‚ СЃРѕС…СЂР°РЅС‘РЅ: {32CD32}" .. newValue .. " СЃРµРєСѓРЅРґ", -1)
             else
-                sampAddChatMessage(taginf .. "Некорректное значение. {32CD32}Введите от 1 до 9999.", -1)
+                sampAddChatMessage(taginf .. "РќРµРєРѕСЂСЂРµРєС‚РЅРѕРµ Р·РЅР°С‡РµРЅРёРµ. {32CD32}Р’РІРµРґРёС‚Рµ РѕС‚ 1 РґРѕ 9999.", -1)
             end
         end
         imgui.PopItemWidth()
@@ -435,180 +542,127 @@ function drawSettingsTab()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
     if imgui.BeginChild("WindowPosition", imgui.ImVec2(0,50), true) then
-        imgui.Text(u8'Положение окна информации:')
+        imgui.Text(u8'РџРѕР»РѕР¶РµРЅРёРµ РѕРєРЅР° РёРЅС„РѕСЂРјР°С†РёРё:')
         imgui.SameLine()
-        if imgui.Button(u8'Изменить положение') then
+        if imgui.Button(u8'РР·РјРµРЅРёС‚СЊ РїРѕР»РѕР¶РµРЅРёРµ') then
             startMovingWindow()
         end
+        imgui.TextDisabled(u8"(Alt + Р›РљРњ РїРѕ Р·Р°РіРѕР»РѕРІРєСѓ РґР»СЏ РїРµСЂРµРјРµС‰РµРЅРёСЏ)")
     end
     imgui.EndChild()
     imgui.PopStyleColor()
 end
 
 function drawThemesTab()
-    imgui.Text(icon('palette') .. u8" Темы")
+    imgui.Text(emoji('palette') .. u8" РўРµРјС‹")
     imgui.Separator()
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
-    if imgui.BeginChild("Themes", imgui.ImVec2(0,150), true) then
-        imgui.Text(u8"Выберите тему оформления:")
-        local themeNames = { "Черная", "Белая", "Красная" }
+    if imgui.BeginChild("Themes", imgui.ImVec2(0,350), true) then
+        imgui.Text(u8"Р’С‹Р±РµСЂРёС‚Рµ С‚РµРјСѓ РѕС„РѕСЂРјР»РµРЅРёСЏ:")
+        local themeNames = { "РџСЂРѕР·СЂР°С‡РЅР°СЏ", "РљР°СЃС‚РѕРјРЅР°СЏ" }
         for i, name in ipairs(themeNames) do
             if imgui.Button(u8(name), imgui.ImVec2(120,40)) then
                 currentTheme[0] = i-1
                 applyTheme(currentTheme[0])
                 ini.main.theme = currentTheme[0]
                 inicfg.save(ini, IniFilename)
-                sampAddChatMessage(taginf .. "Тема изменена на {32CD32}" .. name, -1)
+                sampAddChatMessage(taginf .. "РўРµРјР° РёР·РјРµРЅРµРЅР° РЅР° {32CD32}" .. name, -1)
             end
             if i < #themeNames then imgui.SameLine() end
         end
-        local idx = currentTheme[0]
-        if idx < 0 or idx > 2 then idx = 0 end
-        imgui.Text(u8"Текущая тема: " .. themeNames[idx+1])
+
+        local themeIndex
+        if currentTheme and type(currentTheme) == "table" and type(currentTheme[0]) == "number" then
+            themeIndex = currentTheme[0]
+        else
+            themeIndex = tonumber(ini.main.theme) or 0
+        end
+        themeIndex = math.floor(themeIndex)
+        if themeIndex < 0 or themeIndex > 1 then themeIndex = 0 end
+
+        imgui.Text(u8"РўРµРєСѓС‰Р°СЏ С‚РµРјР°: " .. themeNames[themeIndex+1])
+
+        if themeIndex == 0 then
+            imgui.Separator()
+            imgui.Text(u8"РџСЂРѕР·СЂР°С‡РЅРѕСЃС‚СЊ С„РѕРЅР°:")
+            if imgui.SliderFloat("##transparency", transparency, 0.3, 1.0, "%.2f") then
+                applyTheme(0)
+                ini.main.transparency = transparency[0]
+                inicfg.save(ini, IniFilename)
+            end
+            imgui.TextDisabled(u8"1.0 - РЅРµРїСЂРѕР·СЂР°С‡РЅС‹Р№, 0.3 - СЃРёР»СЊРЅРѕ РїСЂРѕР·СЂР°С‡РЅС‹Р№")
+        elseif themeIndex == 1 then
+            imgui.Separator()
+            imgui.Text(u8"РќР°СЃС‚СЂРѕР№РєР° РєР°СЃС‚РѕРјРЅС‹С… С†РІРµС‚РѕРІ:")
+
+            local changed = false
+            if imgui.ColorEdit4("Р›РµРІР°СЏ РїР°РЅРµР»СЊ", customLeft, imgui.ColorEditFlags.NoInputs + imgui.ColorEditFlags.NoLabel) then
+                changed = true
+            end
+            imgui.SameLine()
+            imgui.Text(u8"Р›РµРІР°СЏ РїР°РЅРµР»СЊ")
+
+            if imgui.ColorEdit4("РџСЂР°РІР°СЏ РїР°РЅРµР»СЊ", customRight, imgui.ColorEditFlags.NoInputs + imgui.ColorEditFlags.NoLabel) then
+                changed = true
+            end
+            imgui.SameLine()
+            imgui.Text(u8"РџСЂР°РІР°СЏ РїР°РЅРµР»СЊ")
+
+            if imgui.ColorEdit4("Р”РѕС‡РµСЂРЅСЏСЏ РїР°РЅРµР»СЊ", customChild, imgui.ColorEditFlags.NoInputs + imgui.ColorEditFlags.NoLabel) then
+                changed = true
+            end
+            imgui.SameLine()
+            imgui.Text(u8"Р”РѕС‡РµСЂРЅСЏСЏ РїР°РЅРµР»СЊ")
+
+            if imgui.ColorEdit4("Р¦РІРµС‚ РЅР°РІРµРґРµРЅРёСЏ", customHover, imgui.ColorEditFlags.NoInputs + imgui.ColorEditFlags.NoLabel) then
+                changed = true
+            end
+            imgui.SameLine()
+            imgui.Text(u8"Р¦РІРµС‚ РЅР°РІРµРґРµРЅРёСЏ")
+
+            if changed then
+                ini.main.customLeftR = customLeft[0]
+                ini.main.customLeftG = customLeft[1]
+                ini.main.customLeftB = customLeft[2]
+                ini.main.customLeftA = customLeft[3]
+                ini.main.customRightR = customRight[0]
+                ini.main.customRightG = customRight[1]
+                ini.main.customRightB = customRight[2]
+                ini.main.customRightA = customRight[3]
+                ini.main.customChildR = customChild[0]
+                ini.main.customChildG = customChild[1]
+                ini.main.customChildB = customChild[2]
+                ini.main.customChildA = customChild[3]
+                ini.main.customHoverR = customHover[0]
+                ini.main.customHoverG = customHover[1]
+                ini.main.customHoverB = customHover[2]
+                ini.main.customHoverA = customHover[3]
+                inicfg.save(ini, IniFilename)
+                applyTheme(1)
+            end
+        end
     end
     imgui.EndChild()
     imgui.PopStyleColor()
 end
 
--- Упрощённые функции обновления
-function checkForUpdates()
-    if checkingUpdates then return end
-    if not has_https then
-        updateInfo.error = "Библиотека ssl.https не найдена. Установите lua-ssl."
-        return
-    end
-
-    checkingUpdates = true
-    updateInfo.available = false
-    updateInfo.error = nil
-
-    local https = require 'ssl.https'
-    local versionUrl = GITHUB_RAW .. VERSION_FILE
-    local response = {}
-    local res, code = https.request{
-        url = versionUrl,
-        sink = ltn12.sink.table(response)
-    }
-
-    if code ~= 200 then
-        updateInfo.error = "Ошибка HTTP при загрузке версии: " .. tostring(code)
-        checkingUpdates = false
-        return
-    end
-
-    local versionData = table.concat(response):gsub("^%s+", ""):gsub("%s+$", "") -- обрезаем пробелы
-    if versionData == "" then
-        updateInfo.error = "Пустой ответ от сервера версий"
-        checkingUpdates = false
-        return
-    end
-
-    -- Сравниваем с текущей версией (простое строковое сравнение)
-    if versionData ~= scriptver then
-        updateInfo.available = true
-        updateInfo.latestVersion = versionData
-        -- Загружаем описание из отдельного файла? Можно не загружать, оставить пустым
-        updateInfo.description = "Обновление доступно"
-    else
-        updateInfo.available = false
-    end
-    checkingUpdates = false
-end
-
-function installUpdate()
-    if not updateInfo.available or downloading then return end
-    if not has_https then
-        updateInfo.error = "Нет библиотеки https"
-        return
-    end
-
-    downloading = true
-    local https = require 'ssl.https'
-    local currentPath = thisScript().path
-    local backupPath = currentPath:gsub("%.lua$", "_backup.lua")
-    local tempPath = currentPath:gsub("%.lua$", "_new.lua")
-    local scriptUrl = GITHUB_RAW .. SCRIPT_FILE
-
-    -- Скачиваем новый файл
-    local file = io.open(tempPath, "wb")
-    if not file then
-        updateInfo.error = "Не удалось создать временный файл"
-        downloading = false
-        return
-    end
-
-    local res, code = https.request{
-        url = scriptUrl,
-        sink = ltn12.sink.file(file)
-    }
-    file:close()
-
-    if code ~= 200 then
-        updateInfo.error = "Ошибка загрузки скрипта: " .. tostring(code)
-        os.remove(tempPath)
-        downloading = false
-        return
-    end
-
-    -- Создаём бэкап
-    os.rename(currentPath, backupPath)
-
-    -- Заменяем
-    local ok = os.rename(tempPath, currentPath)
-    if not ok then
-        -- Восстанавливаем из бэкапа
-        os.rename(backupPath, currentPath)
-        updateInfo.error = "Не удалось заменить файл"
-        downloading = false
-        return
-    end
-
-    -- Удаляем бэкап
-    os.remove(backupPath)
-
-    sampAddChatMessage(tag .. "{00FF00}Обновление установлено! Перезапустите скрипт командой /lua reload " .. thisScript().name, -1)
-    show_arz_notify('success', 'RepFlow', 'Обновление установлено! Перезапустите скрипт.', 5000)
-
-    updateInfo.available = false
-    downloading = false
-end
-
 function drawUpdatesTab()
-    imgui.Text(icon('cloud-arrow-up') .. u8" Обновления")
+    imgui.Text(u8"РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРѕРµ РѕР±РЅРѕРІР»РµРЅРёРµ")
     imgui.Separator()
+
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
-    if imgui.BeginChild("Updates", imgui.ImVec2(0,200), true) then
-        imgui.Text(u8"Текущая версия: " .. scriptver)
-        imgui.Separator()
+    if imgui.BeginChild("Updates", imgui.ImVec2(0,120), true) then
+        
+        imgui.Text(u8"РўРµРєСѓС‰Р°СЏ РІРµСЂСЃРёСЏ: " .. scriptver)
 
-        if not has_https then
-            imgui.TextColored(imgui.ImVec4(1,0,0,1), u8"Ошибка: не установлена библиотека ssl.https")
-        else
-            if checkingUpdates then
-                imgui.Text(u8"Проверка обновлений...")
-            else
-                if imgui.Button(u8"Проверить обновления", imgui.ImVec2(200,30)) then
-                    lua_thread.create(checkForUpdates)
-                end
-
-                if updateInfo.error then
-                    imgui.TextColored(imgui.ImVec4(1,0,0,1), u8"Ошибка: " .. updateInfo.error)
-                elseif updateInfo.available then
-                    imgui.TextColored(imgui.ImVec4(0,1,0,1), u8"Доступно обновление!")
-                    imgui.Text(u8"Новая версия: " .. updateInfo.latestVersion)
-                    imgui.TextWrapped(u8"Описание: " .. updateInfo.description)
-                    if not downloading then
-                        if imgui.Button(u8"Установить обновление", imgui.ImVec2(200,30)) then
-                            lua_thread.create(installUpdate)
-                        end
-                    else
-                        imgui.Text(u8"Загрузка...")
-                    end
-                elseif updateInfo.latestVersion then
-                    imgui.Text(u8"У вас актуальная версия.")
-                end
-            end
+        if imgui.Button(u8"РџСЂРѕРІРµСЂРёС‚СЊ РѕР±РЅРѕРІР»РµРЅРёРµ") then
+            lua_thread.create(function()
+                checkForUpdate(true)
+            end)
         end
+
+        imgui.Separator()
+        imgui.TextDisabled(u8"РћР±РЅРѕРІР»РµРЅРёРµ СЃРєР°С‡РёРІР°РµС‚СЃСЏ РЅР°РїСЂСЏРјСѓСЋ СЃ GitHub")
     end
     imgui.EndChild()
     imgui.PopStyleColor()
@@ -616,7 +670,7 @@ end
 
 function filterFloodMessage(text)
     if hideFloodMsg[0] then
-        if text:find("%[Ошибка%] {FFFFFF}Сейчас нет вопросов в репорт!") or text:find("%[Ошибка%] {FFFFFF}Не флуди!") then
+        if text:find("РЎРµР№С‡Р°СЃ РЅРµС‚ РІРѕРїСЂРѕСЃРѕРІ РІ СЂРµРїРѕСЂС‚!", 1, true) or text:find("РќРµ С„Р»СѓРґРё!", 1, true) then
             return false
         end
     end
@@ -634,7 +688,7 @@ function checkPauseAndDisableAutoStart()
         if gameMinimized then
             gameMinimized = false
             if wasActiveBeforePause then
-                sampAddChatMessage(tag .. '{FFFFFF}Вы вышли из паузы. Ловля отключена из-за AFK!!', -1)
+                sampAddChatMessage(tag .. '{FFFFFF}Р’С‹ РІС‹С€Р»Рё РёР· РїР°СѓР·С‹. Р›РѕРІР»СЏ РѕС‚РєР»СЋС‡РµРЅР° РёР·-Р·Р° AFK!!', -1)
             end
         end
     end
@@ -642,46 +696,45 @@ end
 
 function drawInfoTab(panelColor)
     panelColor = panelColor or colors.childPanelColor
-    imgui.Text(icon('star') .. u8" RepFlow  /  " .. icon('circle_info') .. u8" Информация")
+    imgui.Text(emoji('star') .. u8" RepFlow  /  " .. emoji('circle_info') .. u8" РРЅС„РѕСЂРјР°С†РёСЏ")
     imgui.Separator()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, panelColor)
-    if imgui.BeginChild("Author", imgui.ImVec2(0,100), true) then
-        imgui.Text(u8'Автор: Matthew_McLaren[18]')
-        imgui.Text(u8'Версия: ' .. scriptver)
-        imgui.Text(u8'Связь с разработчиком:')
+    if imgui.BeginChild("Author", imgui.ImVec2(0,130), true) then
+        imgui.Text(u8'РђРІС‚РѕСЂ: Balenciaga_Collins[18]')
+        imgui.Text(u8'Р’РµСЂСЃРёСЏ: ' .. scriptver)
+        imgui.Text(u8'РЎРІСЏР·СЊ СЃ СЂР°Р·СЂР°Р±РѕС‚С‡РёРєРѕРј:')
         imgui.SameLine()
-        imgui.Link('https://t.me/Zorahm', 'Telegram')
+        imgui.Link('https://t.me/Repflowarizona', 'Telegram')
     end
     imgui.EndChild()
     imgui.PopStyleColor()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, panelColor)
     if imgui.BeginChild("Info2", imgui.ImVec2(0,100), true) then
-        imgui.Text(u8'Скрипт автоматически отправляет команду /ot.')
-        imgui.Text(u8'Через определенные интервалы времени.')
-        imgui.Text(u8'А также выслеживает определенные надписи.')
+        imgui.Text(u8'РЎРєСЂРёРїС‚ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё РѕС‚РїСЂР°РІР»СЏРµС‚ РєРѕРјР°РЅРґСѓ /ot.')
+        imgui.Text(u8'Р§РµСЂРµР· РѕРїСЂРµРґРµР»РµРЅРЅС‹Рµ РёРЅС‚РµСЂРІР°Р»С‹ РІСЂРµРјРµРЅРё.')
+        imgui.Text(u8'Рђ С‚Р°РєР¶Рµ РІС‹СЃР»РµР¶РёРІР°РµС‚ РѕРїСЂРµРґРµР»РµРЅРЅС‹Рµ РЅР°РґРїРёСЃРё.')
     end
     imgui.EndChild()
     imgui.PopStyleColor()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, panelColor)
-    if imgui.BeginChild("Info3", imgui.ImVec2(0,110), true) then
-        imgui.CenterText(u8'А также спасибо:')
-        imgui.Text(u8'Тестер: Carl_Mort[18].')
-        imgui.Text(u8'Тестер: Sweet_Lemonte[18].')
-        imgui.Text(u8'Тестер: Balenciaga_Collins[18].')
+    if imgui.BeginChild("Info3", imgui.ImVec2(0,140), true) then
+        imgui.CenterText(u8'Р‘Р»Р°РіРѕРґР°СЂРЅРѕСЃС‚Рё:')
+        imgui.Text(u8'РўРµСЃС‚РµСЂ: Arman_Carukjan')
+        imgui.Text(u8'РўРµСЃС‚РµСЂ: Sora_Deathmarried (Р»РѕС…)')
     end
     imgui.EndChild()
     imgui.PopStyleColor()
 end
 
 function drawChangeLogTab()
-    imgui.Text(icon('star') .. u8" RepFlow  /  " .. icon('bolt') .. u8" ChangeLog")
+    imgui.Text(emoji('star') .. u8" RepFlow  /  " .. emoji('bolt') .. u8" ChangeLog")
     imgui.Separator()
 
     for _, entry in ipairs(changelogEntries) do
-        if imgui.CollapsingHeader(u8("Версия ") .. entry.version) then
+        if imgui.CollapsingHeader(u8("Р’РµСЂСЃРёСЏ ") .. entry.version) then
             imgui.Text(u8(entry.description))
         end
     end
@@ -692,11 +745,11 @@ imgui.OnFrame(function() return main_window_state[0] end, function()
     imgui.SetNextWindowPos(imgui.ImVec2(sw/2, sh/2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5,0.5))
     imgui.PushStyleColor(imgui.Col.WindowBg, colors.rightPanelColor)
 
-    if imgui.Begin(icon('bolt') .. u8' RepFlow | Premium', main_window_state, imgui.WindowFlags.NoCollapse) then
+    if imgui.Begin(emoji('bolt') .. u8' RepFlow | Premium', main_window_state, imgui.WindowFlags.NoCollapse) then
 
         imgui.PushStyleColor(imgui.Col.ChildBg, colors.leftPanelColor)
         if imgui.BeginChild("left_panel", imgui.ImVec2(130,-1), false) then
-            local tabNames = { "Флудер", "Настройки", "Информация", "ChangeLog", "Темы", "Обновления" }
+            local tabNames = { "Р¤Р»СѓРґРµСЂ", "РќР°СЃС‚СЂРѕР№РєРё", "РРЅС„РѕСЂРјР°С†РёСЏ", "ChangeLog", "РўРµРјС‹", "РћР±РЅРѕРІР»РµРЅРёСЏ" }
             for i, name in ipairs(tabNames) do
                 if i-1 == active_tab[0] then
                     imgui.PushStyleColor(imgui.Col.Button, colors.hoverColor)
@@ -751,7 +804,7 @@ function onWindowMessage(msg, wparam, lparam)
             ini.main.keyBind = string.format("0x%X", keyBind)
             ini.main.keyBindName = keyBindName
             inicfg.save(ini, IniFilename)
-            sampAddChatMessage(string.format(tag .. '{FFFFFF}Новая клавиша активации ловли репорта: {00FF00}%s', keyBindName), -1)
+            sampAddChatMessage(string.format(tag .. '{FFFFFF}РќРѕРІР°СЏ РєР»Р°РІРёС€Р° Р°РєС‚РёРІР°С†РёРё Р»РѕРІР»Рё СЂРµРїРѕСЂС‚Р°: {00FF00}%s', keyBindName), -1)
             return false
         end
     end
@@ -794,22 +847,36 @@ function show_arz_notify(type, title, text, time)
     end
 end
 
+-- РћРєРЅРѕ РёРЅС„РѕСЂРјР°С†РёРё
 imgui.OnFrame(function() return info_window_state[0] end, function(self)
     self.HideCursor = true
-    imgui.SetNextWindowSize(imgui.ImVec2(220,175), imgui.Cond.FirstUseEver)
+    local windowWidth = 240
+    local windowHeight = active and 120 or 280
+    imgui.SetNextWindowSize(imgui.ImVec2(windowWidth, windowHeight), imgui.Cond.FirstUseEver)
     imgui.SetNextWindowPos(imgui.ImVec2(ini.widget.posX, ini.widget.posY), imgui.Cond.Always)
-    imgui.Begin(icon('star') .. u8" | Информация ", info_window_state, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoInputs)
-    imgui.CenterText(u8'Статус Ловли: Включена')
+
+    imgui.Begin(emoji('star') .. u8" | РРЅС„РѕСЂРјР°С†РёСЏ ", info_window_state, 
+                imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoInputs)
+
+    imgui.CenterText(u8'РЎС‚Р°С‚СѓСЃ Р›РѕРІР»Рё: Р’РєР»СЋС‡РµРЅР°')
     local elapsedTime = os.clock() - startTime
-    imgui.CenterText(string.format(u8'Время работы: %.2f сек', elapsedTime))
-    imgui.CenterText(string.format(u8'Отвечено репорта: %d', reportAnsweredCount))
-    imgui.Separator()
-    imgui.Text(u8'Обработка диалогов:')
-    imgui.SameLine()
-    imgui.Text(dialogHandlerEnabled[0] and u8'Включена' or u8'Выкл.')
-    imgui.Text(u8'Автостарт:')
-    imgui.SameLine()
-    imgui.Text(autoStartEnabled[0] and u8'Включен' or u8'Выключен')
+    imgui.CenterText(string.format(u8'Р’СЂРµРјСЏ СЂР°Р±РѕС‚С‹: %.2f СЃРµРє', elapsedTime))
+    imgui.CenterText(string.format(u8'РћС‚РІРµС‡РµРЅРѕ СЂРµРїРѕСЂС‚Р°: %d', reportAnsweredCount))
+
+    if not active then
+        imgui.Separator()
+        imgui.Text(u8'РћР±СЂР°Р±РѕС‚РєР° РґРёР°Р»РѕРіРѕРІ:')
+        imgui.SameLine()
+        imgui.Text(dialogHandlerEnabled[0] and u8'Р’РєР»СЋС‡РµРЅР°' or u8'Р’С‹РєР».')
+        imgui.Text(u8'РђРІС‚РѕСЃС‚Р°СЂС‚:')
+        imgui.SameLine()
+        imgui.Text(autoStartEnabled[0] and u8'Р’РєР»СЋС‡РµРЅ' or u8'Р’С‹РєР»СЋС‡РµРЅ')
+        imgui.Separator()
+        imgui.TextDisabled(u8"РџРµСЂРµРјРµС‰РµРЅРёРµ: Alt + Р›РљРњ РїРѕ Р·Р°РіРѕР»РѕРІРєСѓ")
+        imgui.Text(u8"РЎРєСЂРёРїС‚ Р°РєС‚РёРІРµРЅ: " .. formatTime(os.clock() - scriptStartTime))
+        imgui.Text(u8"Р’Р°С€ РЅРёРє: " .. my_nick_utf8)
+    end
+
     imgui.End()
 end)
 
