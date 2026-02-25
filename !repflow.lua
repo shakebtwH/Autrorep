@@ -11,8 +11,8 @@ encoding.default = 'CP1251'
 u8 = encoding.UTF8
 
 -- === НАСТРОЙКИ ОБНОВЛЕНИЯ (ВСТАВЬ СВОИ RAW ССЫЛКИ) ===
-local UPDATE_URL = "ССЫЛКА_НА_ВАШ_UPDATE_JSON" 
-local SCRIPT_URL = "ССЫЛКА_НА_ВАШ_LUA_ФАЙЛ"
+local UPDATE_URL = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/update.json"
+local SCRIPT_URL = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/!repflow.lua"
 local update_found = false
 local update_status = u8"Проверка не проводилась"
 -- ====================================================
@@ -26,6 +26,7 @@ local scriptver = "4.12 | Premium"
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
+    { version = "4.12 | Premium", description = u8"- Добавлена функция автообновления через Github. теперь все обновления будут автоматические." },
     { version = "4.11 | Premium", description = u8"- Убраны строки 'Время работы' и 'Ваш ник' во вкладке 'Информация'." },
     { version = "4.10 | Premium", description = u8"- Убрана полоса прокрутки в окне информации, увеличен размер окна." },
     { version = "4.9 | Premium", description = u8"- В окне информации при включённой ловле теперь показывается только статус, время работы текущей сессии и счётчик отвеченных репортов." },
@@ -410,4 +411,3 @@ function onWindowMessage(msg, wparam, lparam)
         return false
     end
 end
-
