@@ -6,10 +6,10 @@ local encoding = require 'encoding'
 local inicfg = require 'inicfg'
 local ffi = require 'ffi'
 
--- Настройка кодировок
+-- Настройка кодировок: для преобразования UTF-8 -> CP1251 (в чат) и обратно
 encoding.default = 'CP1251'
-u8 = encoding.UTF8
-local to_cp1251 = encoding.CP1251  -- для преобразования UTF-8 -> CP1251
+local toCP1251 = encoding.CP1251.encode   -- функция для перекодировки UTF-8 -> CP1251
+local fromCP1251 = encoding.UTF8           -- функция для CP1251 -> UTF-8 (но мы её используем только для ника)
 
 -- === НАСТРОЙКИ ОБНОВЛЕНИЯ ===
 local UPDATE_URL = "https://raw.githubusercontent.com/shakebtwH/Autrorep/main/update.json"
@@ -22,21 +22,18 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.22 | Premium"
+local scriptver = "4.23 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.22 | Premium", description = "- Исправлено отображение сообщений в чате (UTF-8 -> CP1251).\n- Исправлена работа фильтра 'Не флуди'." },
-    { version = "4.21 | Premium", description = "- Исправлена ошибка 'sampGetCurrentPlayerName'." },
-    { version = "4.20 | Premium", description = "- Полный рефакторинг, удалена библиотека encoding (временно)." },
-    { version = "4.19 | Premium", description = "- Исправлена ошибка 'update_status nil' во вкладке обновлений." },
+    { version = "4.23 | Premium", description = "- Исправлены кракозябры в чате (добавлена перекодировка UTF-8 -> CP1251).\n- Исправлена работа фильтра 'Не флуди'." },
+    { version = "4.22 | Premium", description = "- Возвращена библиотека encoding для перекодировок.\n- Исправлено отображение ника и сообщений в чате." },
+    { version = "4.21 | Premium", description = "- Добавлена ручная перекодировка ника, удалена encoding." },
+    { version = "4.20 | Premium", description = "- Исправлена ошибка 'sampGetCurrentPlayerName'." },
+    { version = "4.19 | Premium", description = "- Исправлена ошибка 'update_status nil'." },
     { version = "4.18 | Premium", description = "- Полностью удалена поддержка FontAwesome." },
     { version = "4.17 | Premium", description = "- Убраны иконки, оставлены текстовые заглушки." },
-    { version = "4.16 | Premium", description = "- Исправлено отображение текста (убрана лишняя обёртка u8())." },
-    { version = "4.15 | Premium", description = "- Исправлена ошибка 'invalid escape sequence'." },
-    { version = "4.14 | Premium", description = "- Добавлена поддержка FontAwesome (позже удалена)." },
-    { version = "4.13 | Premium", description = "- Удалена кастомная тема, добавлена чёрная тема.\n- Уменьшен размер окна до 600x400." },
 }
 
 local keyBind = 0x5A
@@ -74,7 +71,12 @@ local autoStartEnabled = new.bool(true)
 local dialogHandlerEnabled = new.bool(true)
 local hideFloodMsg = new.bool(true)
 
-local my_nick_utf8 = "Игрок"
+local my_nick_utf8 = "Игрок"  -- ник в UTF-8 для отображения в меню
+
+-- Вспомогательная функция для отправки сообщений в чат (с перекодировкой в CP1251)
+local function sendToChat(msg)
+    sampAddChatMessage(toCP1251(msg), -1)
+end
 
 -- ФУНКЦИИ ОБНОВЛЕНИЯ
 function checkUpdates()
@@ -92,7 +94,7 @@ function checkUpdates()
                     if info.version ~= scriptver then
                         update_status = "Доступна версия: " .. info.version
                         update_found = true
-                        sampAddChatMessage(to_cp1251:encode(tag .. "{00FF00}Найдено обновление! Версия: " .. info.version), -1)
+                        sendToChat(tag .. "{00FF00}Найдено обновление! Версия: " .. info.version)
                     else
                         update_status = "У вас последняя версия."
                         update_found = false
@@ -114,7 +116,7 @@ function updateScript()
     local scriptPath = thisScript().path
     downloadUrlToFile(SCRIPT_URL, scriptPath, function(id, status, p1, p2)
         if status == 58 then
-            sampAddChatMessage(to_cp1251:encode(tag .. "{00FF00}Скрипт обновлен! Перезагрузка..."), -1)
+            sendToChat(tag .. "{00FF00}Скрипт обновлен! Перезагрузка...")
             thisScript():reload()
         elseif status == 60 then
             update_status = "Ошибка загрузки"
@@ -130,7 +132,7 @@ local function formatTime(seconds)
     return string.format("%02d:%02d:%02d", h, m, s)
 end
 
--- Получение ника игрока с перекодировкой
+-- Получение ника игрока (в UTF-8)
 local function getPlayerName()
     local name = nil
     if sampGetCurrentPlayerName then
@@ -139,7 +141,7 @@ local function getPlayerName()
         name = samp.get_current_player_name()
     end
     if name and name ~= "" then
-        my_nick_utf8 = u8(name)  -- из CP1251 в UTF-8
+        my_nick_utf8 = fromCP1251(name)  -- преобразуем из CP1251 в UTF-8
     else
         my_nick_utf8 = "Игрок"
     end
@@ -204,7 +206,7 @@ function main()
     sampRegisterChatCommand("arep", cmd_arep)
 
     getPlayerName()
-    sampAddChatMessage(to_cp1251:encode(tag .. 'Скрипт {00FF00}загружен.{FFFFFF} Активация меню: {00FF00}/arep'), -1)
+    sendToChat(tag .. 'Скрипт {00FF00}загружен.{FFFFFF} Активация меню: {00FF00}/arep')
     show_arz_notify('success', 'RepFlow', 'Скрипт загружен. Активация: /arep', 3000)
 
     local prev_main_state = false
@@ -305,7 +307,7 @@ function startMovingWindow()
     showInfoWindow()
     sampToggleCursor(true)
     main_window_state[0] = false
-    sampAddChatMessage(to_cp1251:encode(taginf .. '{FFFF00}Режим перемещения окна активирован. Нажмите "Пробел" для подтверждения.'), -1)
+    sendToChat(taginf .. '{FFFF00}Режим перемещения окна активирован. Нажмите "Пробел" для подтверждения.')
 end
 
 imgui.OnInitialize(function()
@@ -332,24 +334,12 @@ function decor()
     style.ButtonTextAlign = imgui.ImVec2(0.5,0.5)
 end
 
--- Обработка входящих сообщений
 function sampev.onServerMessage(color, text)
-    -- Преобразуем текст в UTF-8 для фильтрации и других проверок
-    local text_utf8 = u8(text)
-    
-    -- Проверка на репорт (ищем в оригинале, но можно и в utf8)
+    -- text уже в UTF-8 (библиотека lib.samp.events автоматически перекодирует)
     if text:find('%[(%W+)%] от (%w+_%w+)%[(%d+)%]:') then
         if active then sampSendChat('/ot') end
     end
-    
-    -- Фильтр "Не флуди" работает с UTF-8 строкой
-    if hideFloodMsg[0] then
-        if text_utf8:find("Сейчас нет вопросов в репорт!", 1, true) or text_utf8:find("Не флуди!", 1, true) then
-            return false
-        end
-    end
-    
-    return true
+    return filterFloodMessage(text)
 end
 
 function onToggleActive()
@@ -364,14 +354,14 @@ function saveWindowSettings()
     ini.widget.posX = ini.widget.posX or 400
     ini.widget.posY = ini.widget.posY or 400
     inicfg.save(ini, IniFilename)
-    sampAddChatMessage(to_cp1251:encode(taginf .. '{00FF00}Положение окна сохранено!'), -1)
+    sendToChat(taginf .. '{00FF00}Положение окна сохранено!')
 end
 
 function sampev.onShowDialog(dialogId, style, title, button1, button2, text)
     if dialogId == 1334 then
         lastDialogTime = os.clock()
         reportAnsweredCount = reportAnsweredCount + 1
-        sampAddChatMessage(to_cp1251:encode(tag .. '{00FF00}Репорт принят! Отвечено репорта: ' .. reportAnsweredCount), -1)
+        sendToChat(tag .. '{00FF00}Репорт принят! Отвечено репорта: ' .. reportAnsweredCount)
         if active then
             active = false
             show_arz_notify('info', 'RepFlow', 'Ловля отключена из-за окна репорта!', 3000)
@@ -408,7 +398,34 @@ function cmd_arep(arg)
     imgui.Process = main_window_state[0]
 end
 
--- Вкладки (текст без u8, просто строки UTF-8)
+-- Фильтр сообщений (работает с UTF-8 строками)
+function filterFloodMessage(text)
+    if hideFloodMsg[0] then
+        if text:find("Сейчас нет вопросов в репорт!", 1, true) or text:find("Не флуди!", 1, true) then
+            return false
+        end
+    end
+    return true
+end
+
+function checkPauseAndDisableAutoStart()
+    if isPauseMenuActive() then
+        if not gameMinimized then
+            wasActiveBeforePause = active
+            if active then active = false end
+            gameMinimized = true
+        end
+    else
+        if gameMinimized then
+            gameMinimized = false
+            if wasActiveBeforePause then
+                sendToChat(tag .. '{FFFFFF}Вы вышли из паузы. Ловля отключена из-за AFK!')
+            end
+        end
+    end
+end
+
+-- Вкладки (строки в UTF-8, меню отображается нормально)
 function drawMainTab()
     imgui.Text("[G] Настройки  /  [M] Флудер")
     imgui.Separator()
@@ -431,9 +448,9 @@ function drawMainTab()
                 otInterval[0] = newValue
                 ini.main.otInterval = newValue
                 inicfg.save(ini, IniFilename)
-                sampAddChatMessage(to_cp1251:encode(taginf .. "Интервал сохранён: {32CD32}" .. newValue .. (useMilliseconds[0] and " мс" or " секунд")), -1)
+                sendToChat(taginf .. "Интервал сохранён: {32CD32}" .. newValue .. (useMilliseconds[0] and " мс" or " секунд"))
             else
-                sampAddChatMessage(to_cp1251:encode(taginf .. "Некорректное значение. {32CD32}Введите число."), -1)
+                sendToChat(taginf .. "Некорректное значение. {32CD32}Введите число.")
             end
         end
         imgui.PopItemWidth()
@@ -496,9 +513,9 @@ function drawSettingsTab()
             if newValue and newValue >= 1 and newValue <= 9999 then
                 dialogTimeout[0] = newValue
                 saveSettings()
-                sampAddChatMessage(to_cp1251:encode(taginf .. "Тайм-аут сохранён: {32CD32}" .. newValue .. " секунд"), -1)
+                sendToChat(taginf .. "Тайм-аут сохранён: {32CD32}" .. newValue .. " секунд")
             else
-                sampAddChatMessage(to_cp1251:encode(taginf .. "Некорректное значение. {32CD32}Введите от 1 до 9999."), -1)
+                sendToChat(taginf .. "Некорректное значение. {32CD32}Введите от 1 до 9999.")
             end
         end
         imgui.PopItemWidth()
@@ -532,7 +549,7 @@ function drawThemesTab()
                 applyTheme(currentTheme[0])
                 ini.main.theme = currentTheme[0]
                 inicfg.save(ini, IniFilename)
-                sampAddChatMessage(to_cp1251:encode(taginf .. "Тема изменена на {32CD32}" .. name), -1)
+                sendToChat(taginf .. "Тема изменена на {32CD32}" .. name)
             end
             if i < #themeNames then imgui.SameLine() end
         end
@@ -565,28 +582,6 @@ function drawUpdatesTab()
     if update_found then
         imgui.SameLine()
         if imgui.Button("Установить сейчас", imgui.ImVec2(160, 30)) then updateScript() end
-    end
-end
-
-function filterFloodMessage(text)
-    -- Больше не используется, т.к. фильтр в sampev.onServerMessage
-    return true
-end
-
-function checkPauseAndDisableAutoStart()
-    if isPauseMenuActive() then
-        if not gameMinimized then
-            wasActiveBeforePause = active
-            if active then active = false end
-            gameMinimized = true
-        end
-    else
-        if gameMinimized then
-            gameMinimized = false
-            if wasActiveBeforePause then
-                sampAddChatMessage(to_cp1251:encode(tag .. '{FFFFFF}Вы вышли из паузы. Ловля отключена из-за AFK!!'), -1)
-            end
-        end
     end
 end
 
@@ -699,7 +694,7 @@ function onWindowMessage(msg, wparam, lparam)
             ini.main.keyBind = string.format("0x%X", keyBind)
             ini.main.keyBindName = keyBindName
             inicfg.save(ini, IniFilename)
-            sampAddChatMessage(to_cp1251:encode(string.format(tag .. '{FFFFFF}Новая клавиша активации ловли репорта: {00FF00}%s', keyBindName)), -1)
+            sendToChat(string.format(tag .. '{FFFFFF}Новая клавиша активации ловли репорта: {00FF00}%s', keyBindName))
             return false
         end
     end
