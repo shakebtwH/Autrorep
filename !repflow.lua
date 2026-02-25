@@ -21,11 +21,12 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.15 | Premium"   -- исправленная версия
+local scriptver = "4.16 | Premium"   -- исправленная версия
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
+     { version = "4.16 | Premium", description = "- Исправлены баги с непонятным шрифтом." },
     { version = "4.15 | Premium", description = "- Исправлена ошибка 'invalid escape sequence' при использовании FontAwesome (заменены \\u-последовательности на корректную генерацию UTF-8)." },
     { version = "4.14 | Premium", description = "- Добавлена поддержка FontAwesome 6 (иконки в меню).\n- Требуется файл 'fa-solid-900.ttf' в папке со скриптом." },
     { version = "4.13 | Premium", description = "- Удалена кастомная тема, добавлена чёрная тема.\n- Уменьшен размер главного окна до 600x400." },
