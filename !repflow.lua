@@ -26,12 +26,13 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.25 | Premium"
+local scriptver = "4.26 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.25 | Premium", description = "- Исправлена работа фильтра 'Не флуди' (удаляются цветовые коды перед поиском)." },
+    { version = "4.26 | Premium", description = "- Исправлена ошибка 'show_arz_notify nil' (перемещено определение функции)." },
+    { version = "4.25 | Premium", description = "- Исправлена работа фильтра 'Не флуди' (удаляются цветовые коды)." },
     { version = "4.24 | Premium", description = "- Исправлена ошибка 'encoding.CP1251 is nil'." },
     { version = "4.23 | Premium", description = "- Исправлены кракозябры в чате." },
     { version = "4.22 | Premium", description = "- Возвращена библиотека encoding." },
@@ -73,9 +74,40 @@ local hideFloodMsg = new.bool(true)
 
 local my_nick_utf8 = "Игрок"
 
--- Функция отправки в чат
+-- Вспомогательная функция для отправки сообщений в чат
 local function sendToChat(msg)
     sampAddChatMessage(toCP1251(msg), -1)
+end
+
+-- Функция уведомлений (Monet/Arz)
+function show_arz_notify(type, title, text, time)
+    if MONET_VERSION then
+        if type == 'info' then type = 3 elseif type == 'error' then type = 2 elseif type == 'success' then type = 1 end
+        local bs = raknetNewBitStream()
+        raknetBitStreamWriteInt8(bs,62)
+        raknetBitStreamWriteInt8(bs,6)
+        raknetBitStreamWriteBool(bs,true)
+        raknetEmulPacketReceiveBitStream(220,bs)
+        raknetDeleteBitStream(bs)
+        local json = encodeJson({styleInt=type,title=title,text=text,duration=time})
+        local bs = raknetNewBitStream()
+        raknetBitStreamWriteInt8(bs,84)
+        raknetBitStreamWriteInt8(bs,6)
+        raknetBitStreamWriteInt8(bs,0)
+        raknetBitStreamWriteInt32(bs,#json)
+        raknetBitStreamWriteString(bs,json)
+        raknetEmulPacketReceiveBitStream(220,bs)
+        raknetDeleteBitStream(bs)
+    else
+        local str = ('window.executeEvent(\'event.notify.initialize\', \'["%s", "%s", "%s", "%s"]\');'):format(type,title,text,time)
+        local bs = raknetNewBitStream()
+        raknetBitStreamWriteInt8(bs,17)
+        raknetBitStreamWriteInt32(bs,0)
+        raknetBitStreamWriteInt32(bs,#str)
+        raknetBitStreamWriteString(bs,str)
+        raknetEmulPacketReceiveBitStream(220,bs)
+        raknetDeleteBitStream(bs)
+    end
 end
 
 -- ФУНКЦИИ ОБНОВЛЕНИЯ
@@ -199,6 +231,301 @@ applyTheme(currentTheme[0])
 
 local lastWindowSize = nil
 
+-- Фильтр сообщений (удаляем цветовые коды)
+function filterFloodMessage(text)
+    if hideFloodMsg[0] then
+        local clean = text:gsub("{%x+}", "")  -- удаляем {RRGGBB}
+        if clean:find("Сейчас нет вопросов в репорт!", 1, true) or clean:find("Не флуди!", 1, true) then
+            return false
+        end
+    end
+    return true
+end
+
+function onToggleActive()
+    active = not active
+    manualDisable = not active
+    disableAutoStartOnToggle = not active
+    local statusArz = active and 'включена' or 'выключена'
+    show_arz_notify('info', 'RepFlow', 'Ловля ' .. statusArz .. '!', 2000)
+end
+
+function saveWindowSettings()
+    ini.widget.posX = ini.widget.posX or 400
+    ini.widget.posY = ini.widget.posY or 400
+    inicfg.save(ini, IniFilename)
+    sendToChat(taginf .. '{00FF00}Положение окна сохранено!')
+end
+
+function startMovingWindow()
+    MoveWidget = true
+    showInfoWindow()
+    sampToggleCursor(true)
+    main_window_state[0] = false
+    sendToChat(taginf .. '{FFFF00}Режим перемещения окна активирован. Нажмите "Пробел" для подтверждения.')
+end
+
+function checkAutoStart()
+    local currentTime = os.clock()
+    if autoStartEnabled[0] and not active and not gameMinimized and (afkExitTime == 0 or currentTime - afkExitTime >= afkCooldown) then
+        if not disableAutoStartOnToggle and (currentTime - lastDialogTime) > dialogTimeout[0] then
+            active = true
+            show_arz_notify('info', 'RepFlow', 'Ловля включена по таймауту', 3000)
+        end
+    end
+end
+
+function saveSettings() ini.main.dialogTimeout = dialogTimeout[0]; inicfg.save(ini, IniFilename) end
+
+function checkPauseAndDisableAutoStart()
+    if isPauseMenuActive() then
+        if not gameMinimized then
+            wasActiveBeforePause = active
+            if active then active = false end
+            gameMinimized = true
+        end
+    else
+        if gameMinimized then
+            gameMinimized = false
+            if wasActiveBeforePause then
+                sendToChat(tag .. '{FFFFFF}Вы вышли из паузы. Ловля отключена из-за AFK!')
+            end
+        end
+    end
+end
+
+function resetIO()
+    for i = 0, 511 do imgui.GetIO().KeysDown[i] = false end
+    for i = 0, 4 do imgui.GetIO().MouseDown[i] = false end
+    imgui.GetIO().KeyCtrl = false; imgui.GetIO().KeyShift = false
+    imgui.GetIO().KeyAlt = false; imgui.GetIO().KeySuper = false
+end
+
+function imgui.Link(link, text)
+    text = text or link
+    local tSize = imgui.CalcTextSize(text)
+    local p = imgui.GetCursorScreenPos()
+    local DL = imgui.GetWindowDrawList()
+    local col = { 0xFFFF7700, 0xFFFF9900 }
+    if imgui.InvisibleButton('##' .. link, tSize) then os.execute('explorer ' .. link) end
+    local color = imgui.IsItemHovered() and col[1] or col[2]
+    DL:AddText(p, color, text)
+    DL:AddLine(imgui.ImVec2(p.x, p.y + tSize.y), imgui.ImVec2(p.x + tSize.x, p.y + tSize.y), color)
+end
+
+function imgui.CenterText(text)
+    local width = imgui.GetWindowWidth()
+    local calc = imgui.CalcTextSize(text)
+    imgui.SetCursorPosX(width/2 - calc.x/2)
+    imgui.Text(text)
+end
+
+-- ВКЛАДКИ (полностью из предыдущих версий, без изменений)
+function drawMainTab()
+    imgui.Text("[G] Настройки  /  [M] Флудер")
+    imgui.Separator()
+    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
+    if imgui.BeginChild("Flooder", imgui.ImVec2(0,150), true) then
+        imgui.PushItemWidth(100)
+        if imgui.Checkbox("Использовать миллисекунды", useMilliseconds) then
+            ini.main.useMilliseconds = useMilliseconds[0]
+            inicfg.save(ini, IniFilename)
+        end
+        imgui.PopItemWidth()
+        imgui.Text("Интервал отправки команды /ot (" .. (useMilliseconds[0] and "в миллисекундах" or "в секундах") .. "):")
+        imgui.Text("Текущий интервал: " .. otInterval[0] .. (useMilliseconds[0] and " мс" or " секунд"))
+        imgui.PushItemWidth(45)
+        imgui.InputText("##otIntervalInput", otIntervalBuffer, ffi.sizeof(otIntervalBuffer))
+        imgui.SameLine()
+        if imgui.Button("[F] Сохранить интервал") then
+            local newValue = tonumber(ffi.string(otIntervalBuffer))
+            if newValue then
+                otInterval[0] = newValue
+                ini.main.otInterval = newValue
+                inicfg.save(ini, IniFilename)
+                sendToChat(taginf .. "Интервал сохранён: {32CD32}" .. newValue .. (useMilliseconds[0] and " мс" or " секунд"))
+            else
+                sendToChat(taginf .. "Некорректное значение. {32CD32}Введите число.")
+            end
+        end
+        imgui.PopItemWidth()
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
+    if imgui.BeginChild("InfoFlooder", imgui.ImVec2(0,65), true) then
+        imgui.Text("Скрипт также ищет надпись в чате [Репорт] от Имя_Фамилия.")
+        imgui.Text("Флудер нужен для дополнительного способа ловли репорта.")
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+end
+
+function drawSettingsTab()
+    imgui.Text("[G] Настройки  /  [S] Основные настройки")
+    imgui.Separator()
+    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
+    if imgui.BeginChild("KeyBind", imgui.ImVec2(0,60), true) then
+        imgui.Text("Текущая клавиша активации:")
+        imgui.SameLine()
+        if imgui.Button("" .. keyBindName) then
+            changingKey = true
+            show_arz_notify('info', 'RepFlow', 'Нажмите новую клавишу для активации', 2000)
+        end
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
+    if imgui.BeginChild("DialogOptions", imgui.ImVec2(0,150), true) then
+        imgui.Text("Обработка диалогов")
+        if imgui.Checkbox("Обрабатывать диалоги", dialogHandlerEnabled) then
+            ini.main.dialogHandlerEnabled = dialogHandlerEnabled[0]
+            inicfg.save(ini, IniFilename)
+        end
+        if imgui.Checkbox("Автостарт ловли по большому активу", autoStartEnabled) then
+            ini.main.autoStartEnabled = autoStartEnabled[0]
+            inicfg.save(ini, IniFilename)
+        end
+        if imgui.Checkbox("Отключить сообщение \"Не флуди\"", hideFloodMsg) then
+            ini.main.otklflud = hideFloodMsg[0]
+            inicfg.save(ini, IniFilename)
+        end
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
+    if imgui.BeginChild("AutoStartTimeout", imgui.ImVec2(0,100), true) then
+        imgui.Text("Настройка тайм-аута автостарта")
+        imgui.PushItemWidth(45)
+        imgui.Text("Текущий тайм-аут: " .. dialogTimeout[0] .. " секунд")
+        imgui.InputText("", dialogTimeoutBuffer, ffi.sizeof(dialogTimeoutBuffer))
+        imgui.SameLine()
+        if imgui.Button("[F] Сохранить тайм-аут") then
+            local newValue = tonumber(ffi.string(dialogTimeoutBuffer))
+            if newValue and newValue >= 1 and newValue <= 9999 then
+                dialogTimeout[0] = newValue
+                saveSettings()
+                sendToChat(taginf .. "Тайм-аут сохранён: {32CD32}" .. newValue .. " секунд")
+            else
+                sendToChat(taginf .. "Некорректное значение. {32CD32}Введите от 1 до 9999.")
+            end
+        end
+        imgui.PopItemWidth()
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
+    if imgui.BeginChild("WindowPosition", imgui.ImVec2(0,50), true) then
+        imgui.Text("Положение окна информации:")
+        imgui.SameLine()
+        if imgui.Button("Изменить положение") then
+            startMovingWindow()
+        end
+        imgui.TextDisabled("(Alt + ЛКМ по заголовку для перемещения)")
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+end
+
+function drawThemesTab()
+    imgui.Text("[P] Темы")
+    imgui.Separator()
+    imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
+    if imgui.BeginChild("Themes", imgui.ImVec2(0,250), true) then
+        imgui.Text("Выберите тему оформления:")
+        local themeNames = { "Прозрачная", "Чёрная" }
+        for i, name in ipairs(themeNames) do
+            if imgui.Button(name, imgui.ImVec2(120,40)) then
+                currentTheme[0] = i-1
+                applyTheme(currentTheme[0])
+                ini.main.theme = currentTheme[0]
+                inicfg.save(ini, IniFilename)
+                sendToChat(taginf .. "Тема изменена на {32CD32}" .. name)
+            end
+            if i < #themeNames then imgui.SameLine() end
+        end
+
+        local themeIndex = currentTheme[0] or 0
+        themeIndex = math.floor(themeIndex)
+        if themeIndex < 0 or themeIndex > 1 then themeIndex = 0 end
+
+        imgui.Text("Текущая тема: " .. themeNames[themeIndex+1])
+
+        imgui.Separator()
+        imgui.Text("Прозрачность фона (для обеих тем):")
+        if imgui.SliderFloat("##transparency", transparency, 0.3, 1.0, "%.2f") then
+            applyTheme(currentTheme[0])
+            ini.main.transparency = transparency[0]
+            inicfg.save(ini, IniFilename)
+        end
+        imgui.TextDisabled("1.0 - непрозрачный, 0.3 - сильно прозрачный")
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+end
+
+function drawUpdatesTab()
+    imgui.Text("Облачное обновление")
+    imgui.Separator()
+    imgui.Text("Текущая версия: " .. scriptver)
+    imgui.Text("Статус: " .. (update_status or "неизвестно"))
+    if imgui.Button("Проверить заново", imgui.ImVec2(160, 30)) then checkUpdates() end
+    if update_found then
+        imgui.SameLine()
+        if imgui.Button("Установить сейчас", imgui.ImVec2(160, 30)) then updateScript() end
+    end
+end
+
+function drawInfoTab(panelColor)
+    panelColor = panelColor or colors.childPanelColor
+    imgui.Text("[I] RepFlow  /  [i] Информация")
+    imgui.Separator()
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, panelColor)
+    if imgui.BeginChild("Author", imgui.ImVec2(0,130), true) then
+        imgui.Text("Автор: Balenciaga_Collins[18]")
+        imgui.Text("Версия: " .. scriptver)
+        imgui.Text("Связь с разработчиком:")
+        imgui.SameLine()
+        imgui.Link('https://t.me/Repflowarizona', 'Telegram')
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, panelColor)
+    if imgui.BeginChild("Info2", imgui.ImVec2(0,100), true) then
+        imgui.Text("Скрипт автоматически отправляет команду /ot.")
+        imgui.Text("Через определенные интервалы времени.")
+        imgui.Text("А также выслеживает определенные надписи.")
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+
+    imgui.PushStyleColor(imgui.Col.ChildBg, panelColor)
+    if imgui.BeginChild("Info3", imgui.ImVec2(0,110), true) then
+        imgui.CenterText("Благодарности:")
+        imgui.Text("Тестер: Arman_Carukjan")
+    end
+    imgui.EndChild()
+    imgui.PopStyleColor()
+end
+
+function drawChangeLogTab()
+    imgui.Text("[C] ChangeLog")
+    imgui.Separator()
+
+    for _, entry in ipairs(changelogEntries) do
+        if imgui.CollapsingHeader("Версия " .. entry.version) then
+            imgui.Text(entry.description)
+        end
+    end
+end
+
+-- Основной цикл
 function main()
     if not isSampLoaded() or not isSampfuncsLoaded() then return end
     while not isSampAvailable() do wait(100) end
@@ -294,21 +621,34 @@ function main()
     end
 end
 
-function resetIO()
-    for i = 0, 511 do imgui.GetIO().KeysDown[i] = false end
-    for i = 0, 4 do imgui.GetIO().MouseDown[i] = false end
-    imgui.GetIO().KeyCtrl = false; imgui.GetIO().KeyShift = false
-    imgui.GetIO().KeyAlt = false; imgui.GetIO().KeySuper = false
+function sampev.onServerMessage(color, text)
+    if text:find('%[(%W+)%] от (%w+_%w+)%[(%d+)%]:') then
+        if active then sampSendChat('/ot') end
+    end
+    return filterFloodMessage(text)
 end
 
-function startMovingWindow()
-    MoveWidget = true
-    showInfoWindow()
-    sampToggleCursor(true)
-    main_window_state[0] = false
-    sendToChat(taginf .. '{FFFF00}Режим перемещения окна активирован. Нажмите "Пробел" для подтверждения.')
+function sampev.onShowDialog(dialogId, style, title, button1, button2, text)
+    if dialogId == 1334 then
+        lastDialogTime = os.clock()
+        reportAnsweredCount = reportAnsweredCount + 1
+        sendToChat(tag .. '{00FF00}Репорт принят! Отвечено репорта: ' .. reportAnsweredCount)
+        if active then
+            active = false
+            show_arz_notify('info', 'RepFlow', 'Ловля отключена из-за окна репорта!', 3000)
+        end
+    end
 end
 
+function cmd_arep(arg)
+    main_window_state[0] = not main_window_state[0]
+    imgui.Process = main_window_state[0]
+end
+
+function showInfoWindow() info_window_state[0] = true end
+function showInfoWindowOff() info_window_state[0] = false end
+
+-- Настройка imgui
 imgui.OnInitialize(function()
     imgui.GetIO().IniFilename = nil
     imgui.GetIO().Fonts:AddFontDefault()
@@ -333,98 +673,105 @@ function decor()
     style.ButtonTextAlign = imgui.ImVec2(0.5,0.5)
 end
 
--- Фильтр сообщений (удаляем цветовые коды)
-function filterFloodMessage(text)
-    if hideFloodMsg[0] then
-        local clean = text:gsub("{%x+}", "")  -- удаляем {RRGGBB}
-        if clean:find("Сейчас нет вопросов в репорт!", 1, true) or clean:find("Не флуди!", 1, true) then
+imgui.OnFrame(function() return main_window_state[0] end, function()
+    imgui.SetNextWindowSize(imgui.ImVec2(ini.widget.sizeX, ini.widget.sizeY), imgui.Cond.FirstUseEver)
+    imgui.SetNextWindowPos(imgui.ImVec2(sw/2, sh/2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5,0.5))
+    imgui.PushStyleColor(imgui.Col.WindowBg, colors.rightPanelColor)
+
+    if imgui.Begin("[R] RepFlow | Premium", main_window_state, imgui.WindowFlags.NoCollapse) then
+
+        imgui.PushStyleColor(imgui.Col.ChildBg, colors.leftPanelColor)
+        if imgui.BeginChild("left_panel", imgui.ImVec2(130,-1), false) then
+            local tabNames = { "Флудер", "Настройки", "Информация", "ChangeLog", "Темы", "Обновления" }
+            for i, name in ipairs(tabNames) do
+                if i-1 == active_tab[0] then
+                    imgui.PushStyleColor(imgui.Col.Button, colors.hoverColor)
+                else
+                    imgui.PushStyleColor(imgui.Col.Button, colors.leftPanelColor)
+                end
+                imgui.PushStyleColor(imgui.Col.ButtonHovered, colors.hoverColor)
+                imgui.PushStyleColor(imgui.Col.ButtonActive, colors.hoverColor)
+
+                if imgui.Button(name, imgui.ImVec2(125,40)) then
+                    active_tab[0] = i-1
+                end
+                imgui.PopStyleColor(3)
+            end
+        end
+        imgui.EndChild()
+        imgui.PopStyleColor()
+
+        imgui.SameLine()
+        imgui.PushStyleColor(imgui.Col.ChildBg, colors.rightPanelColor)
+        if imgui.BeginChild("right_panel", imgui.ImVec2(-1,0), false) then
+            if active_tab[0] == 0 then drawMainTab()
+            elseif active_tab[0] == 1 then drawSettingsTab()
+            elseif active_tab[0] == 2 then drawInfoTab(colors.rightPanelColor)
+            elseif active_tab[0] == 3 then drawChangeLogTab()
+            elseif active_tab[0] == 4 then drawThemesTab()
+            elseif active_tab[0] == 5 then drawUpdatesTab() end
+        end
+        imgui.EndChild()
+        imgui.PopStyleColor()
+
+        local winSize = imgui.GetWindowSize()
+        if lastWindowSize == nil then
+            lastWindowSize = imgui.ImVec2(winSize.x, winSize.y)
+        elseif lastWindowSize.x ~= winSize.x or lastWindowSize.y ~= winSize.y then
+            lastWindowSize = imgui.ImVec2(winSize.x, winSize.y)
+            ini.widget.sizeX = winSize.x
+            ini.widget.sizeY = winSize.y
+            inicfg.save(ini, IniFilename)
+        end
+    end
+    imgui.End()
+    imgui.PopStyleColor()
+end)
+
+-- Окно информации
+imgui.OnFrame(function() return info_window_state[0] end, function(self)
+    self.HideCursor = true
+    local windowWidth = 240
+    local windowHeight = active and 120 or 280
+    imgui.SetNextWindowSize(imgui.ImVec2(windowWidth, windowHeight), imgui.Cond.FirstUseEver)
+    imgui.SetNextWindowPos(imgui.ImVec2(ini.widget.posX, ini.widget.posY), imgui.Cond.Always)
+
+    imgui.Begin("[i] Информация ", info_window_state, 
+                imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoInputs)
+
+    imgui.CenterText("Статус Ловли: " .. (active and "Включена" or "Выключена"))
+    local elapsedTime = os.clock() - startTime
+    imgui.CenterText(string.format("Время работы: %.2f сек", elapsedTime))
+    imgui.CenterText(string.format("Отвечено репорта: %d", reportAnsweredCount))
+
+    if not active then
+        imgui.Separator()
+        imgui.Text("Обработка диалогов:")
+        imgui.SameLine()
+        imgui.Text(dialogHandlerEnabled[0] and "Включена" or "Выкл.")
+        imgui.Text("Автостарт:")
+        imgui.SameLine()
+        imgui.Text(autoStartEnabled[0] and "Включен" or "Выключен")
+        imgui.Separator()
+        imgui.TextDisabled("Перемещение: Alt + ЛКМ по заголовку")
+        imgui.Text("Скрипт активен: " .. formatTime(os.clock() - scriptStartTime))
+        imgui.Text("Ваш ник: " .. my_nick_utf8)
+    end
+
+    imgui.End()
+end)
+
+function onWindowMessage(msg, wparam, lparam)
+    if changingKey then
+        if msg == 0x100 or msg == 0x101 then
+            keyBind = wparam
+            keyBindName = vkeys.id_to_name(keyBind)
+            changingKey = false
+            ini.main.keyBind = string.format("0x%X", keyBind)
+            ini.main.keyBindName = keyBindName
+            inicfg.save(ini, IniFilename)
+            sendToChat(string.format(tag .. '{FFFFFF}Новая клавиша активации ловли репорта: {00FF00}%s', keyBindName))
             return false
         end
     end
-    return true
 end
-
-function sampev.onServerMessage(color, text)
-    if text:find('%[(%W+)%] от (%w+_%w+)%[(%d+)%]:') then
-        if active then sampSendChat('/ot') end
-    end
-    return filterFloodMessage(text)
-end
-
-function onToggleActive()
-    active = not active
-    manualDisable = not active
-    disableAutoStartOnToggle = not active
-    local statusArz = active and 'включена' or 'выключена'
-    show_arz_notify('info', 'RepFlow', 'Ловля ' .. statusArz .. '!', 2000)
-end
-
-function saveWindowSettings()
-    ini.widget.posX = ini.widget.posX or 400
-    ini.widget.posY = ini.widget.posY or 400
-    inicfg.save(ini, IniFilename)
-    sendToChat(taginf .. '{00FF00}Положение окна сохранено!')
-end
-
-function sampev.onShowDialog(dialogId, style, title, button1, button2, text)
-    if dialogId == 1334 then
-        lastDialogTime = os.clock()
-        reportAnsweredCount = reportAnsweredCount + 1
-        sendToChat(tag .. '{00FF00}Репорт принят! Отвечено репорта: ' .. reportAnsweredCount)
-        if active then
-            active = false
-            show_arz_notify('info', 'RepFlow', 'Ловля отключена из-за окна репорта!', 3000)
-        end
-    end
-end
-
-function checkAutoStart()
-    local currentTime = os.clock()
-    if autoStartEnabled[0] and not active and not gameMinimized and (afkExitTime == 0 or currentTime - afkExitTime >= afkCooldown) then
-        if not disableAutoStartOnToggle and (currentTime - lastDialogTime) > dialogTimeout[0] then
-            active = true
-            show_arz_notify('info', 'RepFlow', 'Ловля включена по таймауту', 3000)
-        end
-    end
-end
-
-function saveSettings() ini.main.dialogTimeout = dialogTimeout[0]; inicfg.save(ini, IniFilename) end
-
-function imgui.Link(link, text)
-    text = text or link
-    local tSize = imgui.CalcTextSize(text)
-    local p = imgui.GetCursorScreenPos()
-    local DL = imgui.GetWindowDrawList()
-    local col = { 0xFFFF7700, 0xFFFF9900 }
-    if imgui.InvisibleButton('##' .. link, tSize) then os.execute('explorer ' .. link) end
-    local color = imgui.IsItemHovered() and col[1] or col[2]
-    DL:AddText(p, color, text)
-    DL:AddLine(imgui.ImVec2(p.x, p.y + tSize.y), imgui.ImVec2(p.x + tSize.x, p.y + tSize.y), color)
-end
-
-function cmd_arep(arg)
-    main_window_state[0] = not main_window_state[0]
-    imgui.Process = main_window_state[0]
-end
-
-function checkPauseAndDisableAutoStart()
-    if isPauseMenuActive() then
-        if not gameMinimized then
-            wasActiveBeforePause = active
-            if active then active = false end
-            gameMinimized = true
-        end
-    else
-        if gameMinimized then
-            gameMinimized = false
-            if wasActiveBeforePause then
-                sendToChat(tag .. '{FFFFFF}Вы вышли из паузы. Ловля отключена из-за AFK!')
-            end
-        end
-    end
-end
-
--- Остальные функции вкладок (drawMainTab, drawSettingsTab и т.д.) остаются без изменений
--- (они были в предыдущих версиях и здесь не повторяются для краткости, но в полном коде они присутствуют)
-
--- ... (полный код с вкладками из предыдущего сообщения, они не менялись)
