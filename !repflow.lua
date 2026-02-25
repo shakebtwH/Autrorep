@@ -10,7 +10,7 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.12 | Premium"
+local scriptver = "4.14 | Premium"
 
 ---------------------------
 -- AUTO UPDATE SYSTEM
@@ -874,3 +874,4 @@ end)
 
 function showInfoWindow() info_window_state[0] = true end
 function showInfoWindowOff() info_window_state[0] = false end
+
