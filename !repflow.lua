@@ -26,11 +26,12 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.32 | Premium"
+local scriptver = "4.33 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
+    { version = "4.33 | Premium", description = "- Исправлена ошибка совместимости со старыми версиями ImGui (удалён WindowMinAreaSize)." },
     { version = "4.32 | Premium", description = "- Обновлён дизайн интерфейса: более современные цвета, скругления, отступы." },
     { version = "4.31 | Premium", description = "- Исправлена работа фильтра 'Не флуди'." },
     { version = "4.30 | Premium", description = "- Оптимизация кода, исправление ошибок." },
@@ -715,7 +716,7 @@ end
 function showInfoWindow() info_window_state[0] = true end
 function showInfoWindowOff() info_window_state[0] = false end
 
--- Настройка imgui (обновлённый стиль)
+-- Настройка imgui (обновлённый стиль, совместимый со старыми версиями)
 imgui.OnInitialize(function()
     imgui.GetIO().IniFilename = nil
     imgui.GetIO().Fonts:AddFontDefault()
@@ -726,11 +727,10 @@ function decor()
     imgui.SwitchContext()
     local style = imgui.GetStyle()
 
-    -- Основные параметры
+    -- Основные параметры (только те, что есть во всех версиях)
     style.WindowPadding = imgui.ImVec2(15, 15)
     style.WindowRounding = 15.0
     style.WindowBorderSize = 0.0
-    style.WindowMinAreaSize = imgui.ImVec2(500, 300)
 
     style.ChildRounding = 12.0
     style.ChildBorderSize = 0.0
@@ -748,13 +748,10 @@ function decor()
     style.GrabMinSize = 10.0
     style.GrabRounding = 8.0
 
-    style.TabRounding = 8.0
-    style.TabBorderSize = 0.0
-
     style.ButtonTextAlign = imgui.ImVec2(0.5, 0.5)
     style.WindowTitleAlign = imgui.ImVec2(0.5, 0.5)
 
-    -- Цвета (глобальные настройки, но они будут переопределяться нашими палитрами)
+    -- Цвета (глобальные настройки)
     style.Colors = {
         [imgui.Col.Text] = imgui.ImVec4(1, 1, 1, 1),
         [imgui.Col.TextDisabled] = imgui.ImVec4(0.5, 0.5, 0.5, 1),
