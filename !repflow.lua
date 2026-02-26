@@ -26,12 +26,12 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.30 | Premium"
+local scriptver = "4.31 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.29 | Premium", description = "- Исправлена работа фильтра 'Не флуди' (корректная обработка кодировки и регистра без использования utf8.upper)." },
+    { version = "4.29 | Premium", description = "- Исправлена работа фильтра 'Не флуди' (теперь учитываются знаки препинания и разные окончания)." },
     { version = "4.28 | Premium", description = "- Улучшен фильтр 'Не флуди' (удаление цветовых кодов {RRGGBB} и #AARRGGBB, поиск по ключевым словам)." },
     { version = "4.27 | Premium", description = "- Улучшен фильтр 'Не флуди' (нижний регистр, удаление цветовых кодов)." },
     { version = "4.26 | Premium", description = "- Исправлена ошибка 'show_arz_notify nil'." },
@@ -275,20 +275,23 @@ applyTheme(currentTheme[0])
 
 local lastWindowSize = nil
 
--- МОЩНЫЙ ФИЛЬТР СООБЩЕНИЙ (исправленный, без utf8.upper)
+-- МОЩНЫЙ ФИЛЬТР СООБЩЕНИЙ (исправленный и улучшенный)
 function filterFloodMessage(text)
     if hideFloodMsg[0] then
         -- Конвертируем из CP1251 в UTF-8 для корректного поиска русских фраз
         local utf8_text = toUTF8(text)
         -- Удаляем цветовые коды {RRGGBB}, #AARRGGBB, #RRGGBB
         local clean = utf8_text:gsub("{%x+}", ""):gsub("#%x+", "")
-        -- Удаляем пробелы в начале и конце
-        clean = clean:match("^%s*(.-)%s*$")
-        -- Приводим к нижнему регистру (только русские буквы)
+        -- Заменяем знаки препинания и управляющие символы на пробелы (чтобы "не флуди!" стало "не флуди ")
+        clean = clean:gsub("[%p%c]", " ")
+        -- Убираем лишние пробелы и обрезаем края
+        clean = clean:gsub("%s+", " "):match("^%s*(.-)%s*$")
+        -- Приводим к нижнему регистру (только русские буквы, остальное без изменений)
         clean = utf8_lower(clean)
-        -- Ключевые фразы (тоже в нижнем регистре)
+        -- Ключевые фразы для поиска (в нижнем регистре)
         local banPhrases = {
             utf8_lower("не флуди"),
+            utf8_lower("не флуд"),   -- на случай разных окончаний (не флудите, не флудят)
             utf8_lower("сейчас нет вопросов в репорт")
         }
         for _, phrase in ipairs(banPhrases) do
