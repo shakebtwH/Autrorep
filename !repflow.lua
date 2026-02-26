@@ -26,11 +26,15 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.31 | Premium"
+local scriptver = "4.33 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
+    { version = "4.33 | Premium", description = "- Автоматическая проверка обновлений при запуске скрипта." },
+    { version = "4.32 | Premium", description = "- Обновлён дизайн интерфейса: более современные цвета, скругления, отступы." },
+    { version = "4.31 | Premium", description = "- Исправлена работа фильтра 'Не флуди'." },
+    { version = "4.30 | Premium", description = "- Оптимизация кода, исправление ошибок." },
     { version = "4.29 | Premium", description = "- Исправлена работа фильтра 'Не флуди' (теперь учитываются знаки препинания и разные окончания)." },
     { version = "4.28 | Premium", description = "- Улучшен фильтр 'Не флуди' (удаление цветовых кодов {RRGGBB} и #AARRGGBB, поиск по ключевым словам)." },
     { version = "4.27 | Premium", description = "- Улучшен фильтр 'Не флуди' (нижний регистр, удаление цветовых кодов)." },
@@ -170,7 +174,7 @@ function checkUpdates()
                     if info.version ~= scriptver then
                         update_status = "Доступна версия: " .. info.version
                         update_found = true
-                        sendToChat(tag .. "{00FF00}Найдено обновление! Версия: " .. info.version)
+                        sendToChat(tag .. "{00FF00}Найдено обновление! Версия: " .. info.version .. " | Используйте /arep → Обновления для установки.")
                     else
                         update_status = "У вас последняя версия."
                         update_found = false
@@ -251,23 +255,26 @@ local currentTheme = new.int(themeValue)
 
 local transparency = new.float(ini.main.transparency or 0.8)
 
+-- Обновлённые цвета для более современного вида
 local colors = {}
 local function applyTheme(themeIndex)
     if themeIndex == 0 then
+        -- Тёмно-синяя тема (благородная)
         colors = {
-            leftPanelColor = imgui.ImVec4(27/255,20/255,30/255,transparency[0]),
-            rightPanelColor = imgui.ImVec4(24/255,18/255,28/255,transparency[0]),
-            childPanelColor = imgui.ImVec4(18/255,13/255,22/255,transparency[0]),
-            hoverColor = imgui.ImVec4(63/255,59/255,66/255,transparency[0]),
-            textColor = imgui.ImVec4(1,1,1,1),
+            leftPanelColor = imgui.ImVec4(0.11, 0.12, 0.16, transparency[0]),   -- #1C1F29
+            rightPanelColor = imgui.ImVec4(0.15, 0.16, 0.20, transparency[0]),  -- #262A34
+            childPanelColor = imgui.ImVec4(0.19, 0.20, 0.24, transparency[0]),  -- #30333D
+            hoverColor = imgui.ImVec4(0.25, 0.45, 0.85, transparency[0]),       -- #3F73D9 (акцент)
+            textColor = imgui.ImVec4(1, 1, 1, 1),
         }
     else
+        -- Классическая чёрная (минимализм)
         colors = {
-            leftPanelColor = imgui.ImVec4(0,0,0,transparency[0]),
-            rightPanelColor = imgui.ImVec4(0,0,0,transparency[0]),
-            childPanelColor = imgui.ImVec4(0.05,0.05,0.05,transparency[0]),
-            hoverColor = imgui.ImVec4(0.2,0.2,0.2,transparency[0]),
-            textColor = imgui.ImVec4(1,1,1,1),
+            leftPanelColor = imgui.ImVec4(0.05, 0.05, 0.05, transparency[0]),
+            rightPanelColor = imgui.ImVec4(0.08, 0.08, 0.08, transparency[0]),
+            childPanelColor = imgui.ImVec4(0.12, 0.12, 0.12, transparency[0]),
+            hoverColor = imgui.ImVec4(0.25, 0.25, 0.25, transparency[0]),
+            textColor = imgui.ImVec4(1, 1, 1, 1),
         }
     end
 end
@@ -498,9 +505,9 @@ function drawThemesTab()
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
     if imgui.BeginChild("Themes", imgui.ImVec2(0,250), true) then
         imgui.Text("Выберите тему оформления:")
-        local themeNames = { "Прозрачная", "Чёрная" }
+        local themeNames = { "Современная (синяя)", "Классическая (чёрная)" }
         for i, name in ipairs(themeNames) do
-            if imgui.Button(name, imgui.ImVec2(120,40)) then
+            if imgui.Button(name, imgui.ImVec2(160,40)) then
                 currentTheme[0] = i-1
                 applyTheme(currentTheme[0])
                 ini.main.theme = currentTheme[0]
@@ -595,6 +602,9 @@ function main()
     getPlayerName()
     sendToChat(tag .. 'Скрипт {00FF00}загружен.{FFFFFF} Активация меню: {00FF00}/arep')
     show_arz_notify('success', 'RepFlow', 'Скрипт загружен. Активация: /arep', 3000)
+
+    -- Автоматическая проверка обновлений при запуске
+    checkUpdates()
 
     local prev_main_state = false
 
@@ -709,7 +719,7 @@ end
 function showInfoWindow() info_window_state[0] = true end
 function showInfoWindowOff() info_window_state[0] = false end
 
--- Настройка imgui
+-- Настройка imgui (обновлённый стиль, совместимый со старыми версиями)
 imgui.OnInitialize(function()
     imgui.GetIO().IniFilename = nil
     imgui.GetIO().Fonts:AddFontDefault()
@@ -719,19 +729,82 @@ end)
 function decor()
     imgui.SwitchContext()
     local style = imgui.GetStyle()
-    style.WindowPadding = imgui.ImVec2(12,12)
-    style.WindowRounding = 12
-    style.ChildRounding = 10
-    style.FramePadding = imgui.ImVec2(8,6)
-    style.FrameRounding = 10
-    style.ItemSpacing = imgui.ImVec2(10,10)
-    style.ItemInnerSpacing = imgui.ImVec2(10,10)
-    style.ScrollbarSize = 12
-    style.ScrollbarRounding = 10
-    style.GrabRounding = 10
-    style.PopupRounding = 10
-    style.WindowTitleAlign = imgui.ImVec2(0.5,0.5)
-    style.ButtonTextAlign = imgui.ImVec2(0.5,0.5)
+
+    -- Основные параметры (только те, что есть во всех версиях)
+    style.WindowPadding = imgui.ImVec2(15, 15)
+    style.WindowRounding = 15.0
+    style.WindowBorderSize = 0.0
+
+    style.ChildRounding = 12.0
+    style.ChildBorderSize = 0.0
+
+    style.FramePadding = imgui.ImVec2(10, 8)
+    style.FrameRounding = 8.0
+    style.FrameBorderSize = 0.0
+
+    style.ItemSpacing = imgui.ImVec2(12, 12)
+    style.ItemInnerSpacing = imgui.ImVec2(10, 10)
+
+    style.IndentSpacing = 20.0
+    style.ScrollbarSize = 12.0
+    style.ScrollbarRounding = 10.0
+    style.GrabMinSize = 10.0
+    style.GrabRounding = 8.0
+
+    style.ButtonTextAlign = imgui.ImVec2(0.5, 0.5)
+    style.WindowTitleAlign = imgui.ImVec2(0.5, 0.5)
+
+    -- Цвета (глобальные настройки)
+    style.Colors = {
+        [imgui.Col.Text] = imgui.ImVec4(1, 1, 1, 1),
+        [imgui.Col.TextDisabled] = imgui.ImVec4(0.5, 0.5, 0.5, 1),
+        [imgui.Col.WindowBg] = imgui.ImVec4(0.15, 0.16, 0.20, 1),
+        [imgui.Col.ChildBg] = imgui.ImVec4(0.11, 0.12, 0.16, 1),
+        [imgui.Col.PopupBg] = imgui.ImVec4(0.08, 0.08, 0.08, 0.94),
+        [imgui.Col.Border] = imgui.ImVec4(0.3, 0.3, 0.3, 0.5),
+        [imgui.Col.BorderShadow] = imgui.ImVec4(0, 0, 0, 0),
+        [imgui.Col.FrameBg] = imgui.ImVec4(0.2, 0.21, 0.25, 1),
+        [imgui.Col.FrameBgHovered] = imgui.ImVec4(0.25, 0.45, 0.85, 0.6),
+        [imgui.Col.FrameBgActive] = imgui.ImVec4(0.25, 0.45, 0.85, 0.8),
+        [imgui.Col.TitleBg] = imgui.ImVec4(0.11, 0.12, 0.16, 1),
+        [imgui.Col.TitleBgActive] = imgui.ImVec4(0.25, 0.45, 0.85, 0.8),
+        [imgui.Col.TitleBgCollapsed] = imgui.ImVec4(0.15, 0.15, 0.15, 1),
+        [imgui.Col.MenuBarBg] = imgui.ImVec4(0.11, 0.12, 0.16, 1),
+        [imgui.Col.ScrollbarBg] = imgui.ImVec4(0.05, 0.05, 0.05, 1),
+        [imgui.Col.ScrollbarGrab] = imgui.ImVec4(0.25, 0.45, 0.85, 0.5),
+        [imgui.Col.ScrollbarGrabHovered] = imgui.ImVec4(0.25, 0.45, 0.85, 0.7),
+        [imgui.Col.ScrollbarGrabActive] = imgui.ImVec4(0.25, 0.45, 0.85, 0.9),
+        [imgui.Col.CheckMark] = imgui.ImVec4(0.25, 0.45, 0.85, 1),
+        [imgui.Col.SliderGrab] = imgui.ImVec4(0.25, 0.45, 0.85, 0.7),
+        [imgui.Col.SliderGrabActive] = imgui.ImVec4(0.25, 0.45, 0.85, 1),
+        [imgui.Col.Button] = imgui.ImVec4(0.2, 0.21, 0.25, 1),
+        [imgui.Col.ButtonHovered] = imgui.ImVec4(0.25, 0.45, 0.85, 0.6),
+        [imgui.Col.ButtonActive] = imgui.ImVec4(0.25, 0.45, 0.85, 0.8),
+        [imgui.Col.Header] = imgui.ImVec4(0.2, 0.21, 0.25, 1),
+        [imgui.Col.HeaderHovered] = imgui.ImVec4(0.25, 0.45, 0.85, 0.6),
+        [imgui.Col.HeaderActive] = imgui.ImVec4(0.25, 0.45, 0.85, 0.8),
+        [imgui.Col.Separator] = imgui.ImVec4(0.3, 0.3, 0.3, 1),
+        [imgui.Col.SeparatorHovered] = imgui.ImVec4(0.25, 0.45, 0.85, 0.6),
+        [imgui.Col.SeparatorActive] = imgui.ImVec4(0.25, 0.45, 0.85, 0.8),
+        [imgui.Col.ResizeGrip] = imgui.ImVec4(0.25, 0.45, 0.85, 0.2),
+        [imgui.Col.ResizeGripHovered] = imgui.ImVec4(0.25, 0.45, 0.85, 0.6),
+        [imgui.Col.ResizeGripActive] = imgui.ImVec4(0.25, 0.45, 0.85, 0.8),
+        [imgui.Col.Tab] = imgui.ImVec4(0.11, 0.12, 0.16, 1),
+        [imgui.Col.TabHovered] = imgui.ImVec4(0.25, 0.45, 0.85, 0.6),
+        [imgui.Col.TabActive] = imgui.ImVec4(0.25, 0.45, 0.85, 0.8),
+        [imgui.Col.TabUnfocused] = imgui.ImVec4(0.08, 0.08, 0.08, 1),
+        [imgui.Col.TabUnfocusedActive] = imgui.ImVec4(0.15, 0.15, 0.15, 1),
+        [imgui.Col.PlotLines] = imgui.ImVec4(0.6, 0.6, 0.6, 1),
+        [imgui.Col.PlotLinesHovered] = imgui.ImVec4(1, 1, 1, 1),
+        [imgui.Col.PlotHistogram] = imgui.ImVec4(0.25, 0.45, 0.85, 1),
+        [imgui.Col.PlotHistogramHovered] = imgui.ImVec4(0.35, 0.55, 0.95, 1),
+        [imgui.Col.TextSelectedBg] = imgui.ImVec4(0.25, 0.45, 0.85, 0.35),
+        [imgui.Col.DragDropTarget] = imgui.ImVec4(1, 1, 0, 0.9),
+        [imgui.Col.NavHighlight] = imgui.ImVec4(1, 1, 1, 1),
+        [imgui.Col.NavWindowingHighlight] = imgui.ImVec4(1, 1, 1, 1),
+        [imgui.Col.NavWindowingDimBg] = imgui.ImVec4(0.8, 0.8, 0.8, 0.2),
+        [imgui.Col.ModalWindowDimBg] = imgui.ImVec4(0.2, 0.2, 0.2, 0.35),
+    }
 end
 
 imgui.OnFrame(function() return main_window_state[0] end, function()
