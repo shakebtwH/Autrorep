@@ -1,3 +1,4 @@
+```lua
 require 'lib.moonloader'
 local imgui = require 'mimgui'
 local sampev = require 'lib.samp.events'
@@ -26,11 +27,12 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.36 | Premium"
+local scriptver = "4.37 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
+    { version = "4.37 | Premium", description = "- Уменьшен размер главного окна до 680x420 для более компактного вида.\n- Увеличено информационное окно до 280 пикселей, текст теперь не выходит за границы.\n- Исправлено возможное смещение текста в окне информации (использован перенос строк).\n- Мелкие правки интерфейса для идеального выравнивания." },
     { version = "4.36 | Premium", description = "- Интерфейс полностью переработан: увеличен размер окна до 750x480, левая панель 160px.\n- Исправлены все текстовые ошибки: 'Фулдер' → 'Флудер', 'Образовать диалоги' → 'Обрабатывать диалоги', кнопка '[F] Сохранить тайм-а!' → '[F] Сохранить тайм-аут'.\n- Увеличены размеры кнопок, чекбоксов, полей ввода – текст теперь нигде не обрезается.\n- Добавлены отступы для аккуратного выравнивания." },
     { version = "4.35 | Premium", description = "- Увеличен размер интерфейса до 700x450, левая панель 150px.\n- Исправлено отображение элементов во вкладке 'Настройки'." },
     { version = "4.34 | Premium", description = "- Уменьшен размер окна, добавлен тестер Sora_Deathmarried." },
@@ -229,14 +231,14 @@ local function getPlayerName()
     end
 end
 
--- Увеличен размер окна: 750x480
+-- Новый размер окна: 680x420 (чуть меньше)
 local ini = inicfg.load({
     main = {
         keyBind = "0x5A", keyBindName = 'Z', otInterval = 10, useMilliseconds = false,
         theme = 0, transparency = 0.8, dialogTimeout = 600, dialogHandlerEnabled = true,
         autoStartEnabled = true, otklflud = false,
     },
-    widget = { posX = 400, posY = 400, sizeX = 750, sizeY = 480 }
+    widget = { posX = 400, posY = 400, sizeX = 680, sizeY = 420 }
 }, IniFilename)
 
 local MoveWidget = false
@@ -384,12 +386,12 @@ function imgui.CenterText(text)
     imgui.Text(text)
 end
 
--- ВКЛАДКИ (идеально выровненные)
+-- ВКЛАДКИ
 function drawMainTab()
     imgui.Text("[G] Настройки  /  [M] Флудер")
     imgui.Separator()
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
-    if imgui.BeginChild("Flooder", imgui.ImVec2(0,180), true) then
+    if imgui.BeginChild("Flooder", imgui.ImVec2(0,160), true) then  -- уменьшено
         imgui.PushItemWidth(140)
         if imgui.Checkbox("Использовать миллисекунды", useMilliseconds) then
             ini.main.useMilliseconds = useMilliseconds[0]
@@ -401,7 +403,7 @@ function drawMainTab()
         imgui.PushItemWidth(80)
         imgui.InputText("##otIntervalInput", otIntervalBuffer, ffi.sizeof(otIntervalBuffer))
         imgui.SameLine()
-        if imgui.Button("[F] Сохранить интервал", imgui.ImVec2(160, 28)) then
+        if imgui.Button("[F] Сохранить интервал", imgui.ImVec2(150, 28)) then
             local newValue = tonumber(ffi.string(otIntervalBuffer))
             if newValue then
                 otInterval[0] = newValue
@@ -418,7 +420,7 @@ function drawMainTab()
     imgui.PopStyleColor()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
-    if imgui.BeginChild("InfoFlooder", imgui.ImVec2(0,80), true) then
+    if imgui.BeginChild("InfoFlooder", imgui.ImVec2(0,70), true) then
         imgui.Text("Скрипт также ищет надпись в чате [Репорт] от Имя_Фамилия.")
         imgui.Text("Флудер нужен для дополнительного способа ловли репорта.")
     end
@@ -442,7 +444,7 @@ function drawSettingsTab()
     imgui.PopStyleColor()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
-    if imgui.BeginChild("DialogOptions", imgui.ImVec2(0,180), true) then  -- увеличено для трёх чекбоксов
+    if imgui.BeginChild("DialogOptions", imgui.ImVec2(0,160), true) then  -- чуть меньше
         imgui.Text("Обработка диалогов")
         if imgui.Checkbox("Обрабатывать диалоги", dialogHandlerEnabled) then
             ini.main.dialogHandlerEnabled = dialogHandlerEnabled[0]
@@ -461,13 +463,13 @@ function drawSettingsTab()
     imgui.PopStyleColor()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
-    if imgui.BeginChild("AutoStartTimeout", imgui.ImVec2(0,120), true) then
+    if imgui.BeginChild("AutoStartTimeout", imgui.ImVec2(0,110), true) then
         imgui.Text("Настройка тайм-аута автостарта")
         imgui.PushItemWidth(80)
         imgui.Text("Текущий тайм-аут: " .. dialogTimeout[0] .. " секунд")
         imgui.InputText("", dialogTimeoutBuffer, ffi.sizeof(dialogTimeoutBuffer))
         imgui.SameLine()
-        if imgui.Button("[F] Сохранить тайм-аут", imgui.ImVec2(160, 28)) then  -- исправлено название
+        if imgui.Button("[F] Сохранить тайм-аут", imgui.ImVec2(150, 28)) then
             local newValue = tonumber(ffi.string(dialogTimeoutBuffer))
             if newValue and newValue >= 1 and newValue <= 9999 then
                 dialogTimeout[0] = newValue
@@ -486,7 +488,7 @@ function drawSettingsTab()
     if imgui.BeginChild("WindowPosition", imgui.ImVec2(0,60), true) then
         imgui.Text("Положение окна информации:")
         imgui.SameLine()
-        if imgui.Button("Изменить положение", imgui.ImVec2(160, 28)) then
+        if imgui.Button("Изменить положение", imgui.ImVec2(150, 28)) then
             startMovingWindow()
         end
         imgui.TextDisabled("(Alt + ЛКМ по заголовку для перемещения)")
@@ -499,11 +501,11 @@ function drawThemesTab()
     imgui.Text("[P] Темы")
     imgui.Separator()
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
-    if imgui.BeginChild("Themes", imgui.ImVec2(0,250), true) then
+    if imgui.BeginChild("Themes", imgui.ImVec2(0,220), true) then  -- уменьшено
         imgui.Text("Выберите тему оформления:")
         local themeNames = { "Современная (синяя)", "Классическая (чёрная)" }
         for i, name in ipairs(themeNames) do
-            if imgui.Button(name, imgui.ImVec2(180,45)) then
+            if imgui.Button(name, imgui.ImVec2(170,42)) then
                 currentTheme[0] = i-1
                 applyTheme(currentTheme[0])
                 ini.main.theme = currentTheme[0]
@@ -536,10 +538,10 @@ function drawUpdatesTab()
     imgui.Separator()
     imgui.Text("Текущая версия: " .. scriptver)
     imgui.Text("Статус: " .. (update_status or "неизвестно"))
-    if imgui.Button("Проверить заново", imgui.ImVec2(180, 32)) then checkUpdates() end
+    if imgui.Button("Проверить заново", imgui.ImVec2(170, 30)) then checkUpdates() end
     if update_found then
         imgui.SameLine()
-        if imgui.Button("Установить сейчас", imgui.ImVec2(180, 32)) then updateScript() end
+        if imgui.Button("Установить сейчас", imgui.ImVec2(170, 30)) then updateScript() end
     end
 end
 
@@ -549,7 +551,7 @@ function drawInfoTab(panelColor)
     imgui.Separator()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, panelColor)
-    if imgui.BeginChild("Author", imgui.ImVec2(0,160), true) then
+    if imgui.BeginChild("Author", imgui.ImVec2(0,150), true) then
         imgui.Text("Автор: Balenciaga_Collins[18]")
         imgui.Text("Версия: " .. scriptver)
         imgui.Text("Связь с разработчиком:")
@@ -560,7 +562,7 @@ function drawInfoTab(panelColor)
     imgui.PopStyleColor()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, panelColor)
-    if imgui.BeginChild("Info2", imgui.ImVec2(0,110), true) then
+    if imgui.BeginChild("Info2", imgui.ImVec2(0,100), true) then
         imgui.Text("Скрипт автоматически отправляет команду /ot.")
         imgui.Text("Через определенные интервалы времени.")
         imgui.Text("А также выслеживает определенные надписи.")
@@ -569,7 +571,7 @@ function drawInfoTab(panelColor)
     imgui.PopStyleColor()
 
     imgui.PushStyleColor(imgui.Col.ChildBg, panelColor)
-    if imgui.BeginChild("Info3", imgui.ImVec2(0,110), true) then
+    if imgui.BeginChild("Info3", imgui.ImVec2(0,100), true) then
         imgui.CenterText("Благодарности:")
         imgui.Text("Тестеры: Arman_Carukjan, Sora_Deathmarried")
     end
@@ -652,7 +654,7 @@ function main()
 
             if altPressed and mousePressed and not isDraggingInfo then
                 local winX, winY = ini.widget.posX, ini.widget.posY
-                local winW, winH = 240, active and 120 or 280
+                local winW, winH = 280, active and 130 or 290  -- увеличена ширина и высота
                 if mouseX >= winX and mouseX <= winX + winW and mouseY >= winY and mouseY <= winY + 30 then
                     isDraggingInfo = true
                     dragOffsetX = mouseX - winX
@@ -713,7 +715,7 @@ end
 function showInfoWindow() info_window_state[0] = true end
 function showInfoWindowOff() info_window_state[0] = false end
 
--- Настройка imgui (увеличенные отступы, идеальное выравнивание)
+-- Настройка imgui (увеличенные отступы, но окно чуть меньше)
 imgui.OnInitialize(function()
     imgui.GetIO().IniFilename = nil
     imgui.GetIO().Fonts:AddFontDefault()
@@ -724,25 +726,25 @@ function decor()
     imgui.SwitchContext()
     local style = imgui.GetStyle()
 
-    style.WindowPadding = imgui.ImVec2(20, 20)
-    style.WindowRounding = 18.0
+    style.WindowPadding = imgui.ImVec2(18, 18)
+    style.WindowRounding = 16.0
     style.WindowBorderSize = 0.0
 
-    style.ChildRounding = 16.0
+    style.ChildRounding = 14.0
     style.ChildBorderSize = 0.0
 
-    style.FramePadding = imgui.ImVec2(14, 12)
-    style.FrameRounding = 12.0
+    style.FramePadding = imgui.ImVec2(12, 10)
+    style.FrameRounding = 10.0
     style.FrameBorderSize = 0.0
 
-    style.ItemSpacing = imgui.ImVec2(16, 14)
-    style.ItemInnerSpacing = imgui.ImVec2(14, 12)
+    style.ItemSpacing = imgui.ImVec2(14, 12)
+    style.ItemInnerSpacing = imgui.ImVec2(12, 10)
 
-    style.IndentSpacing = 24.0
-    style.ScrollbarSize = 16.0
-    style.ScrollbarRounding = 12.0
-    style.GrabMinSize = 14.0
-    style.GrabRounding = 10.0
+    style.IndentSpacing = 22.0
+    style.ScrollbarSize = 14.0
+    style.ScrollbarRounding = 10.0
+    style.GrabMinSize = 12.0
+    style.GrabRounding = 8.0
 
     style.ButtonTextAlign = imgui.ImVec2(0.5, 0.5)
     style.WindowTitleAlign = imgui.ImVec2(0.5, 0.5)
@@ -806,10 +808,10 @@ imgui.OnFrame(function() return main_window_state[0] end, function()
 
     if imgui.Begin("[R] RepFlow | Premium", main_window_state, imgui.WindowFlags.NoCollapse) then
 
-        -- Левая панель: ширина 160px, кнопки 150x45
+        -- Левая панель: ширина 150px, кнопки 140x42 (чуть меньше)
         imgui.PushStyleColor(imgui.Col.ChildBg, colors.leftPanelColor)
-        if imgui.BeginChild("left_panel", imgui.ImVec2(160,-1), false) then
-            local tabNames = { "Флудер", "Настройки", "Информация", "ChangeLog", "Темы", "Обновления" }  -- исправлено "Фулдер" на "Флудер"
+        if imgui.BeginChild("left_panel", imgui.ImVec2(150,-1), false) then
+            local tabNames = { "Флудер", "Настройки", "Информация", "ChangeLog", "Темы", "Обновления" }
             for i, name in ipairs(tabNames) do
                 if i-1 == active_tab[0] then
                     imgui.PushStyleColor(imgui.Col.Button, colors.hoverColor)
@@ -819,7 +821,7 @@ imgui.OnFrame(function() return main_window_state[0] end, function()
                 imgui.PushStyleColor(imgui.Col.ButtonHovered, colors.hoverColor)
                 imgui.PushStyleColor(imgui.Col.ButtonActive, colors.hoverColor)
 
-                if imgui.Button(name, imgui.ImVec2(150,45)) then
+                if imgui.Button(name, imgui.ImVec2(140,42)) then
                     active_tab[0] = i-1
                 end
                 imgui.PopStyleColor(3)
@@ -855,17 +857,19 @@ imgui.OnFrame(function() return main_window_state[0] end, function()
     imgui.PopStyleColor()
 end)
 
--- Окно информации
+-- Окно информации (увеличенное, с переносом текста)
 imgui.OnFrame(function() return info_window_state[0] end, function(self)
     self.HideCursor = true
-    local windowWidth = 240
-    local windowHeight = active and 120 or 280
+    local windowWidth = 280  -- увеличено
+    local windowHeight = active and 140 or 300  -- чуть больше
     imgui.SetNextWindowSize(imgui.ImVec2(windowWidth, windowHeight), imgui.Cond.FirstUseEver)
     imgui.SetNextWindowPos(imgui.ImVec2(ini.widget.posX, ini.widget.posY), imgui.Cond.Always)
 
     imgui.Begin("[i] Информация ", info_window_state, 
                 imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoInputs)
 
+    -- Используем TextWrapped для длинных строк
+    imgui.PushTextWrapPos(260)  -- чуть меньше ширины окна
     imgui.CenterText("Статус Ловли: " .. (active and "Включена" or "Выключена"))
     local elapsedTime = os.clock() - startTime
     imgui.CenterText(string.format("Время работы: %.2f сек", elapsedTime))
@@ -884,6 +888,7 @@ imgui.OnFrame(function() return info_window_state[0] end, function(self)
         imgui.Text("Скрипт активен: " .. formatTime(os.clock() - scriptStartTime))
         imgui.Text("Ваш ник: " .. my_nick_utf8)
     end
+    imgui.PopTextWrapPos()
 
     imgui.End()
 end)
@@ -902,3 +907,4 @@ function onWindowMessage(msg, wparam, lparam)
         end
     end
 end
+```
