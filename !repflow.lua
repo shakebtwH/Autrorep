@@ -24,12 +24,12 @@ local update_status = "Проверка не проводилась"
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.49 | Premium"
+local scriptver = "5.0 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.49 | Premium", description = "Полностью переработан скрипт: добавлен флудер /ot с настраиваемым интервалом в миллисекундах, красивый современный интерфейс, информационное окно, автообновление." },
+    { version = "5.0 | Premium", description = "Полностью переработан скрипт: добавлен флудер /ot с настраиваемым интервалом в миллисекундах, красивый современный интерфейс, информационное окно, автообновление." },
 }
 
 -- Функция приведения UTF-8 строки к нижнему регистру (для фильтра)
@@ -170,7 +170,18 @@ end
 
 -- Получение ника игрока (исправлено)
 local function getPlayerName()
-    local name = sampGetCurrentPlayerName()
+    local name = nil
+    -- Пробуем через стандартную функцию (если есть)
+    if sampGetCurrentPlayerName then
+        name = sampGetCurrentPlayerName()
+    end
+    -- Если не получилось, пробуем через ID игрока
+    if not name or name == "" then
+        local playerId = sampGetPlayerIdByCharHandle(PLAYER_PED)
+        if playerId then
+            name = sampGetPlayerName(playerId)
+        end
+    end
     if name and name ~= "" then
         my_nick_utf8 = toUTF8(name)
     else
