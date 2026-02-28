@@ -24,12 +24,12 @@ local update_status = "Проверка не проводилась"
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "5.0 | Premium"
+local scriptver = "5.1 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "5.0 | Premium", description = "Полностью переработан скрипт: добавлен флудер /ot с настраиваемым интервалом в миллисекундах, красивый современный интерфейс, информационное окно, автообновление." },
+    { version = "5.1 | Premium", description = "Полностью переработан скрипт: добавлен флудер /ot с настраиваемым интервалом в миллисекундах, красивый современный интерфейс, информационное окно, автообновление." },
 }
 
 -- Функция приведения UTF-8 строки к нижнему регистру (для фильтра)
@@ -76,7 +76,7 @@ local autoStartEnabled = new.bool(false)
 local afkExitTime = 0
 local afkCooldown = 30
 
--- Ник
+-- Ник (просто заглушка, без сложного получения)
 local my_nick_utf8 = "Игрок"
 
 -- Флаг смены клавиши
@@ -166,27 +166,6 @@ function updateScript()
             thisScript():reload()
         elseif status == 60 then update_status = "Ошибка загрузки" end
     end)
-end
-
--- Получение ника игрока (исправлено)
-local function getPlayerName()
-    local name = nil
-    -- Пробуем через стандартную функцию (если есть)
-    if sampGetCurrentPlayerName then
-        name = sampGetCurrentPlayerName()
-    end
-    -- Если не получилось, пробуем через ID игрока
-    if not name or name == "" then
-        local playerId = sampGetPlayerIdByCharHandle(PLAYER_PED)
-        if playerId then
-            name = sampGetPlayerName(playerId)
-        end
-    end
-    if name and name ~= "" then
-        my_nick_utf8 = toUTF8(name)
-    else
-        my_nick_utf8 = "Игрок"
-    end
 end
 
 -- Фильтр "Не флуди"
@@ -323,7 +302,6 @@ function main()
     if not isSampLoaded() or not isSampfuncsLoaded() then return end
     while not isSampAvailable() do wait(100) end
 
-    getPlayerName()
     sampRegisterChatCommand("arep", function()
         main_window_state[0] = not main_window_state[0]
         if main_window_state[0] then sampToggleCursor(true) else sampToggleCursor(false) end
