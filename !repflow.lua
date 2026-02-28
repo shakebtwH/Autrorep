@@ -5,6 +5,7 @@ local vkeys = require 'vkeys'
 local encoding = require 'encoding'
 local inicfg = require 'inicfg'
 local ffi = require 'ffi'
+local samp = require 'samp'  -- добавляем полный модуль samp
 
 -- Настройка кодировок
 encoding.default = 'CP1251'
@@ -22,16 +23,14 @@ local update_found = false
 local update_status = "Проверка не проводилась"
 -- =============================
 
-if not samp then samp = {} end
-
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.46 | Premium"
+local scriptver = "4.47 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.46 | Premium", description = "Полностью переработан скрипт: добавлен флудер /ot с настраиваемым интервалом в миллисекундах, красивый современный интерфейс, информационное окно, автообновление." },
+    { version = "4.47 | Premium", description = "Полностью переработан скрипт: добавлен флудер /ot с настраиваемым интервалом в миллисекундах, красивый современный интерфейс, информационное окно, автообновление." },
 }
 
 -- Функция приведения UTF-8 строки к нижнему регистру (для фильтра)
@@ -167,10 +166,14 @@ function updateScript()
     end)
 end
 
--- Получение ника игрока
+-- Получение ника игрока (исправлено)
 local function getPlayerName()
-    local name = sampGetCurrentPlayerName() or samp.get_current_player_name()
-    my_nick_utf8 = name and name ~= "" and toUTF8(name) or "Игрок"
+    local name = samp and samp.get_current_player_name and samp.get_current_player_name()
+    if name and name ~= "" then
+        my_nick_utf8 = toUTF8(name)
+    else
+        my_nick_utf8 = "Игрок"
+    end
 end
 
 -- Фильтр "Не флуди"
