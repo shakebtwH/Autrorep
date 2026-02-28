@@ -24,12 +24,12 @@ local update_status = "Проверка не проводилась"
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "5.1 | Premium"
+local scriptver = "5.2 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "5.1 | Premium", description = "Полностью переработан скрипт: добавлен флудер /ot с настраиваемым интервалом в миллисекундах, красивый современный интерфейс, информационное окно, автообновление." },
+    { version = "5.2 | Premium", description = "Полностью переработан скрипт: добавлен флудер /ot с настраиваемым интервалом в миллисекундах, красивый современный интерфейс, информационное окно, автообновление." },
 }
 
 -- Функция приведения UTF-8 строки к нижнему регистру (для фильтра)
@@ -55,7 +55,7 @@ local keyBind = 0x5A
 local keyBindName = 'Z'
 local lastOtTime = 0
 local active = false
-local otInterval = new.int(1000)          -- в миллисекундах, по умолчанию 1000 мс
+local otInterval = new.int(1000)          -- в миллисекундах
 local otIntervalBuffer = imgui.new.char[5](tostring(otInterval[0]))
 local reportAnsweredCount = 0
 local startTime = os.clock()
@@ -70,13 +70,11 @@ local isDraggingInfo = false
 local dragOffsetX, dragOffsetY = 0, 0
 
 local hideFloodMsg = new.bool(true)   -- фильтр "Не флуди"
-
--- Для автостарта
 local autoStartEnabled = new.bool(false)
 local afkExitTime = 0
 local afkCooldown = 30
 
--- Ник (просто заглушка, без сложного получения)
+-- Ник (просто заглушка)
 local my_nick_utf8 = "Игрок"
 
 -- Флаг смены клавиши
@@ -105,7 +103,6 @@ local transparency = new.float(ini.main.transparency or 0.9)
 local colors = {}
 local function applyTheme(themeIndex)
     if themeIndex == 0 then
-        -- Тёмно-синяя современная
         colors = {
             leftPanelColor = imgui.ImVec4(0.11, 0.12, 0.16, transparency[0]),
             rightPanelColor = imgui.ImVec4(0.15, 0.16, 0.20, transparency[0]),
@@ -114,7 +111,6 @@ local function applyTheme(themeIndex)
             textColor = imgui.ImVec4(1,1,1,1),
         }
     else
-        -- Чёрная классическая
         colors = {
             leftPanelColor = imgui.ImVec4(0.05,0.05,0.05, transparency[0]),
             rightPanelColor = imgui.ImVec4(0.08,0.08,0.08, transparency[0]),
@@ -128,9 +124,9 @@ applyTheme(currentTheme[0])
 
 -- Функции для отправки сообщений
 local function sendToChat(msg) sampAddChatMessage(toCP1251(msg), -1) end
-function show_arz_notify(type, title, text, time) end -- заглушка
+function show_arz_notify() end -- заглушка
 
--- Автообновление
+-- Автообновление (упрощённое, без сложных корутин)
 function checkUpdates()
     update_status = "Проверка..."
     local path = getWorkingDirectory() .. '\\repflow_upd.json'
@@ -340,7 +336,7 @@ function main()
             onToggleActive()
         end
 
-        -- Информационное окно видно только когда активна ловля
+        -- Информационное окно
         info_window_state[0] = active
 
         -- Перемещение инфо-окна
