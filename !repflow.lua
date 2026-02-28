@@ -23,11 +23,11 @@ local update_status = "Проверка не проводилась"
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "1.1 | Premium"
+local scriptver = "1.2 | Premium"
 
--- Список изменений (будет отображаться во вкладке "Обновления")
+-- Список изменений
 local changelogEntries = {
-    { version = "1.1 | Premium", description = "Исправлена ошибка с анимацией, оптимизирован код, добавлена плавность появления окон." },
+    { version = "1.2 | Premium", description = "Исправлена ошибка с анимацией, оптимизирован код, добавлена плавность появления окон, устранены конфликты с другими скриптами." },
     { version = "1.0", description = "Первый релиз: флудер /ot с настраиваемым интервалом, автообновлением, сменой тем и анимациями." },
 }
 
@@ -54,7 +54,7 @@ local keyBind = 0x5A
 local keyBindName = 'Z'
 local lastOtTime = 0
 local active = false
-local otInterval = new.int(1000)          -- миллисекунды
+local otInterval = new.int(1000)
 local otIntervalBuffer = imgui.new.char[5](tostring(otInterval[0]))
 local startTime = os.clock()
 
@@ -68,7 +68,6 @@ local afkExitTime = 0
 local afkCooldown = 30
 
 local my_nick_utf8 = "Игрок"
-
 local changingKey = false
 
 -- Загрузка INI
@@ -278,7 +277,7 @@ function drawChangelogTab()
     imgui.PopStyleColor()
 end
 
--- Анимация появления (плавное изменение прозрачности) без PushStyleVar
+-- Анимация появления (плавное изменение прозрачности)
 local windowAlpha = new.float(0.0)
 local function animateWindow(state)
     local targetAlpha = state and 1.0 or 0.0
@@ -288,6 +287,10 @@ local function animateWindow(state)
     end
     return windowAlpha[0]
 end
+
+-- Сохраняем старые обработчики для предотвращения конфликтов
+local old_onWindowMessage = onWindowMessage
+local old_onServerMessage = sampev.onServerMessage
 
 -- Основной поток
 function main()
@@ -338,9 +341,33 @@ function main()
     end
 end
 
--- Фильтр сообщений (опционально)
-function sampev.onServerMessage(color, text)
-    return filterFloodMessage(text)
+-- Фильтр сообщений с поддержкой старых обработчиков
+sampev.onServerMessage = function(color, text)
+    local our_result = filterFloodMessage(text)
+    local old_result = true
+    if old_onServerMessage then
+        old_result = old_onServerMessage(color, text)
+        if old_result == false then return false end
+    end
+    return our_result
+end
+
+-- Обработчик смены клавиши с сохранением предыдущего
+onWindowMessage = function(msg, wparam, lparam)
+    if old_onWindowMessage then
+        old_onWindowMessage(msg, wparam, lparam)
+    end
+
+    if changingKey then
+        if msg == 0x100 or msg == 0x101 then
+            keyBind = wparam
+            keyBindName = vkeys.id_to_name(keyBind)
+            changingKey = false
+            saveSettings()
+            sendToChat("{1E90FF} [!repflow]: Новая клавиша: " .. keyBindName)
+            return false
+        end
+    end
 end
 
 -- ImGui инициализация
@@ -365,7 +392,6 @@ imgui.OnFrame(function() return main_window_state[0] end, function()
     local alpha = animateWindow(main_window_state[0])
     if alpha < 0.01 then return end
 
-    -- Сохраняем текущую глобальную альфу и устанавливаем свою для анимации
     local oldAlpha = imgui.GetStyle().Alpha
     imgui.GetStyle().Alpha = alpha
 
@@ -413,21 +439,5 @@ imgui.OnFrame(function() return main_window_state[0] end, function()
     end
     imgui.End()
     imgui.PopStyleColor()
-
-    -- Восстанавливаем глобальную альфу
     imgui.GetStyle().Alpha = oldAlpha
 end)
-
--- Смена клавиши
-function onWindowMessage(msg, wparam, lparam)
-    if changingKey then
-        if msg == 0x100 or msg == 0x101 then
-            keyBind = wparam
-            keyBindName = vkeys.id_to_name(keyBind)
-            changingKey = false
-            saveSettings()
-            sendToChat("{1E90FF} [!repflow]: Новая клавиша: " .. keyBindName)
-            return false
-        end
-    end
-end
