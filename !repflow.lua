@@ -21,13 +21,14 @@ local update_found = false
 local update_status = "Проверка не проводилась"
 -- =============================
 
-local IniFilename = 'RepFlowCFG.ini'   -- сохранение совместимости
+local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "1.0 | Premium"
+local scriptver = "1.1 | Premium"
 
+-- Список изменений (будет отображаться во вкладке "Обновления")
 local changelogEntries = {
-    { version = "1.0", description = "Полностью переработан: чистый флудер /ot, добавлена анимация появления окон, вкладка обновлений, сохранены автообновление и смена тем." },
-    { version = "0.9", description = "Предыдущая версия с репорт-системой." },
+    { version = "1.1 | Premium", description = "Исправлена ошибка с анимацией, оптимизирован код, добавлена плавность появления окон." },
+    { version = "1.0", description = "Первый релиз: флудер /ot с настраиваемым интервалом, автообновлением, сменой тем и анимациями." },
 }
 
 -- Нижний регистр для UTF‑8 (для фильтра)
@@ -277,7 +278,7 @@ function drawChangelogTab()
     imgui.PopStyleColor()
 end
 
--- Анимация появления (плавное изменение прозрачности)
+-- Анимация появления (плавное изменение прозрачности) без PushStyleVar
 local windowAlpha = new.float(0.0)
 local function animateWindow(state)
     local targetAlpha = state and 1.0 or 0.0
@@ -356,7 +357,6 @@ imgui.OnInitialize(function()
     style.ItemSpacing = imgui.ImVec2(12,10)
     style.ButtonTextAlign = imgui.ImVec2(0.5,0.5)
     style.WindowTitleAlign = imgui.ImVec2(0.5,0.5)
-    style.Alpha = 1.0
 end)
 
 -- Главное окно
@@ -365,7 +365,10 @@ imgui.OnFrame(function() return main_window_state[0] end, function()
     local alpha = animateWindow(main_window_state[0])
     if alpha < 0.01 then return end
 
-    imgui.PushStyleVar(imgui.StyleVar.Alpha, alpha)
+    -- Сохраняем текущую глобальную альфу и устанавливаем свою для анимации
+    local oldAlpha = imgui.GetStyle().Alpha
+    imgui.GetStyle().Alpha = alpha
+
     imgui.SetNextWindowSize(imgui.ImVec2(ini.window.sizeX, ini.window.sizeY), imgui.Cond.FirstUseEver)
     imgui.SetNextWindowPos(imgui.ImVec2(sw/2, sh/2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5,0.5))
     imgui.PushStyleColor(imgui.Col.WindowBg, colors.rightPanelColor)
@@ -410,7 +413,9 @@ imgui.OnFrame(function() return main_window_state[0] end, function()
     end
     imgui.End()
     imgui.PopStyleColor()
-    imgui.PopStyleVar()
+
+    -- Восстанавливаем глобальную альфу
+    imgui.GetStyle().Alpha = oldAlpha
 end)
 
 -- Смена клавиши
