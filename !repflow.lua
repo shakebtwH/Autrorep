@@ -25,15 +25,34 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.43 | Premium"
+local scriptver = "4.44 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
+    { version = "4.44 | Premium", description = "Полная переработка кода: добавлено окно changelog, оставлены только информационное окно, автообновление и версия." },
     { version = "4.43 | Premium", description = "Скрипт временно закрыт. Информация теперь отображается в меню /arep." },
+    { version = "4.42 | Premium", description = "Убран разделитель, уменьшен размер окна." },
+    { version = "4.39 | Premium", description = "Скрипт временно закрыт. Информация теперь отображается в меню /arep." },
+    { version = "4.38 | Premium", description = "Исправлено отображение текста и кнопок во вкладке 'Флудер': добавлен перенос строк, увеличена ширина поля ввода, кнопка теперь не обрезается." },
+    { version = "4.37 | Premium", description = "Уменьшен размер главного окна до 680x420 для более компактного вида." },
+    { version = "4.36 | Premium", description = "Интерфейс полностью переработан: увеличен размер окна до 750x480, левая панель 160px." },
+    { version = "4.35 | Premium", description = "Увеличен размер интерфейса до 700x450, левая панель 150px." },
+    { version = "4.34 | Premium", description = "Уменьшен размер окна, добавлен тестер Sora_Deathmarried." },
+    { version = "4.33 | Premium", description = "Автоматическая проверка обновлений при запуске скрипта." },
+    { version = "4.32 | Premium", description = "Обновлён дизайн интерфейса: более современные цвета, скругления, отступы." },
+    { version = "4.31 | Premium", description = "Исправлена работа фильтра 'Не флуди'." },
+    { version = "4.30 | Premium", description = "Оптимизация кода, исправление ошибок." },
+    { version = "4.29 | Premium", description = "Исправлена работа фильтра 'Не флуди' (теперь учитываются знаки препинания и разные окончания)." },
+    { version = "4.28 | Premium", description = "Улучшен фильтр 'Не флуди' (удаление цветовых кодов {RRGGBB} и #AARRGGBB, поиск по ключевым словам)." },
+    { version = "4.27 | Premium", description = "Улучшен фильтр 'Не флуди' (нижний регистр, удаление цветовых кодов)." },
+    { version = "4.26 | Premium", description = "Исправлена ошибка 'show_arz_notify nil'." },
+    { version = "4.25 | Premium", description = "Исправлена работа фильтра 'Не флуди'." },
+    { version = "4.24 | Premium", description = "Исправлена ошибка 'encoding.CP1251 is nil'." },
+    { version = "4.23 | Premium", description = "Исправлены кракозябры в чате." },
 }
 
--- Вспомогательная функция для отправки сообщений в чат (только для уведомлений об обновлении)
+-- Вспомогательная функция для отправки сообщений в чат
 local function sendToChat(msg)
     sampAddChatMessage(toCP1251(msg), -1)
 end
@@ -84,22 +103,23 @@ function updateScript()
     end)
 end
 
--- Переменные для управления окном
+-- Переменные для управления окнами
 local main_window_state = new.bool(false)
+local changelog_window_state = new.bool(false)
 local sw, sh = getScreenResolution()
 
--- Цвета для окна (простая тёмная тема)
+-- Цвета для окон
 local colors = {
     bgColor = imgui.ImVec4(0.11, 0.12, 0.16, 1.0),
     textColor = imgui.ImVec4(1, 1, 1, 1),
     linkColor = imgui.ImVec4(0.25, 0.45, 0.85, 1.0),
 }
 
--- Функция для рисования информационного окна
-function drawInfoWindow()
+-- Функция для рисования главного информационного окна
+function drawMainWindow()
     imgui.Text("Скрипт временно закрыт.")
     imgui.Text("Ожидайте новостей от разработчика в Telegram.")
-    imgui.Separator()
+    imgui.Dummy(imgui.ImVec2(0, 5))
     
     -- Кликабельная ссылка
     local link = "https://t.me/Repflowarizona"
@@ -109,18 +129,55 @@ function drawInfoWindow()
     local DL = imgui.GetWindowDrawList()
     
     if imgui.InvisibleButton("##telegram_link", tSize) then
-        os.execute('start ' .. link)  -- открыть ссылку в браузере
+        os.execute('start ' .. link)
     end
     
     local color = imgui.IsItemHovered() and 0xFFFFAA00 or 0xFF3F73D9
     DL:AddText(p, color, text)
     DL:AddLine(imgui.ImVec2(p.x, p.y + tSize.y), imgui.ImVec2(p.x + tSize.x, p.y + tSize.y), color)
     
-    imgui.Dummy(imgui.ImVec2(0, 10)) -- отступ
-    if imgui.Button("Закрыть", imgui.ImVec2(200, 30)) then
+    imgui.Dummy(imgui.ImVec2(0, 15))
+    
+    -- Кнопки
+    if imgui.Button("Changelog", imgui.ImVec2(120, 30)) then
+        changelog_window_state[0] = true
+    end
+    imgui.SameLine()
+    if imgui.Button("Закрыть", imgui.ImVec2(120, 30)) then
         main_window_state[0] = false
         sampToggleCursor(false)
     end
+end
+
+-- Функция для рисования окна changelog
+function drawChangelogWindow()
+    imgui.Text("История изменений")
+    imgui.Separator()
+    
+    if imgui.BeginChild("changelog_scroll", imgui.ImVec2(0, -50), true) then
+        for _, entry in ipairs(changelogEntries) do
+            if imgui.CollapsingHeader("Версия " .. entry.version) then
+                imgui.PushTextWrapPos(0)
+                imgui.Text(entry.description)
+                imgui.PopTextWrapPos()
+            end
+        end
+    end
+    imgui.EndChild()
+    
+    imgui.Separator()
+    imgui.Text("Текущая версия: " .. scriptver)
+    imgui.SameLine()
+    if imgui.Button("Проверить обновления", imgui.ImVec2(150, 25)) then
+        checkUpdates()
+    end
+    if update_found then
+        imgui.SameLine()
+        if imgui.Button("Установить", imgui.ImVec2(100, 25)) then
+            updateScript()
+        end
+    end
+    imgui.Text("Статус: " .. update_status)
 end
 
 -- Основной цикл
@@ -128,7 +185,6 @@ function main()
     if not isSampLoaded() or not isSampfuncsLoaded() then return end
     while not isSampAvailable() do wait(100) end
 
-    -- Регистрация команды /arep
     sampRegisterChatCommand("arep", function()
         main_window_state[0] = not main_window_state[0]
         if main_window_state[0] then
@@ -138,16 +194,13 @@ function main()
         end
     end)
 
-    -- Приветственное сообщение в чат (один раз)
     sendToChat("{1E90FF} [RepFlow]: {FFFF00}Скрипт временно закрыт. Меню: /arep")
     checkUpdates()
 
-    -- Основной цикл
     while true do
         wait(0)
 
-        -- Управление отрисовкой imgui: окно рисуется только когда оно открыто и игра не на паузе
-        if main_window_state[0] and not isPauseMenuActive() then
+        if (main_window_state[0] or changelog_window_state[0]) and not isPauseMenuActive() then
             imgui.Process = true
         else
             imgui.Process = false
@@ -155,7 +208,7 @@ function main()
     end
 end
 
--- Обработчики SAMP отключены (возвращаем true, чтобы сообщения проходили)
+-- Обработчики SAMP отключены
 function sampev.onServerMessage(color, text)
     return true
 end
@@ -174,29 +227,42 @@ end)
 function decor()
     imgui.SwitchContext()
     local style = imgui.GetStyle()
-    style.WindowPadding = imgui.ImVec2(20, 20)
+    style.WindowPadding = imgui.ImVec2(18, 18)
     style.WindowRounding = 12.0
     style.WindowBorderSize = 0.0
     style.FramePadding = imgui.ImVec2(10, 8)
     style.FrameRounding = 8.0
-    style.ItemSpacing = imgui.ImVec2(12, 12)
+    style.ItemSpacing = imgui.ImVec2(12, 10)
     style.ButtonTextAlign = imgui.ImVec2(0.5, 0.5)
     style.WindowTitleAlign = imgui.ImVec2(0.5, 0.5)
 end
 
+-- Отрисовка главного окна
 imgui.OnFrame(function() return main_window_state[0] end, function()
-    imgui.SetNextWindowSize(imgui.ImVec2(350, 200), imgui.Cond.FirstUseEver)
+    imgui.SetNextWindowSize(imgui.ImVec2(300, 180), imgui.Cond.FirstUseEver)
     imgui.SetNextWindowPos(imgui.ImVec2(sw/2, sh/2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5,0.5))
     imgui.PushStyleColor(imgui.Col.WindowBg, colors.bgColor)
 
     if imgui.Begin("RepFlow | Premium", main_window_state, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize) then
-        drawInfoWindow()
+        drawMainWindow()
     end
     imgui.End()
     imgui.PopStyleColor()
 end)
 
--- Обработчик оконных сообщений (не используется, но оставлен для совместимости)
+-- Отрисовка окна changelog
+imgui.OnFrame(function() return changelog_window_state[0] end, function()
+    imgui.SetNextWindowSize(imgui.ImVec2(450, 350), imgui.Cond.FirstUseEver)
+    imgui.SetNextWindowPos(imgui.ImVec2(sw/2, sh/2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5,0.5))
+    imgui.PushStyleColor(imgui.Col.WindowBg, colors.bgColor)
+
+    if imgui.Begin("Changelog", changelog_window_state, imgui.WindowFlags.NoCollapse) then
+        drawChangelogWindow()
+    end
+    imgui.End()
+    imgui.PopStyleColor()
+end)
+
 function onWindowMessage(msg, wparam, lparam)
     return false
 end
