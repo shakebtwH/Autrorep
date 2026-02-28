@@ -6,7 +6,6 @@ local encoding = require 'encoding'
 local inicfg = require 'inicfg'
 local ffi = require 'ffi'
 
--- Настройка кодировок
 encoding.default = 'CP1251'
 local function toCP1251(utf8_str)
     return encoding.UTF8:decode(utf8_str)
@@ -22,17 +21,16 @@ local update_found = false
 local update_status = "Проверка не проводилась"
 -- =============================
 
-local IniFilename = 'RepFlowCFG.ini'
+local IniFilename = 'RepFlowCFG.ini'   -- сохранение совместимости
 local new = imgui.new
-local scriptver = "5.2 | Premium"
-
-local scriptStartTime = os.clock()
+local scriptver = "1.0 | Premium"
 
 local changelogEntries = {
-    { version = "5.2 | Premium", description = "Полностью переработан скрипт: добавлен флудер /ot с настраиваемым интервалом в миллисекундах, красивый современный интерфейс, информационное окно, автообновление." },
+    { version = "1.0", description = "Полностью переработан: чистый флудер /ot, добавлена анимация появления окон, вкладка обновлений, сохранены автообновление и смена тем." },
+    { version = "0.9", description = "Предыдущая версия с репорт-системой." },
 }
 
--- Функция приведения UTF-8 строки к нижнему регистру (для фильтра)
+-- Нижний регистр для UTF‑8 (для фильтра)
 local utf8_lower_map = {
     ['\208\144'] = '\208\176', ['\208\145'] = '\208\177', ['\208\146'] = '\208\178',
     ['\208\147'] = '\208\179', ['\208\148'] = '\208\180', ['\208\149'] = '\208\181',
@@ -50,43 +48,35 @@ local function utf8_lower(str)
     return str:gsub('([\208\209]..)', function(c) return utf8_lower_map[c] or c end)
 end
 
--- Переменные
+-- Переменные флудера
 local keyBind = 0x5A
 local keyBindName = 'Z'
 local lastOtTime = 0
 local active = false
-local otInterval = new.int(1000)          -- в миллисекундах
+local otInterval = new.int(1000)          -- миллисекунды
 local otIntervalBuffer = imgui.new.char[5](tostring(otInterval[0]))
-local reportAnsweredCount = 0
 local startTime = os.clock()
 
 local main_window_state = new.bool(false)
-local info_window_state = new.bool(false)
 local active_tab = new.int(0)
 local sw, sh = getScreenResolution()
 
--- Для перемещения инфо-окна
-local isDraggingInfo = false
-local dragOffsetX, dragOffsetY = 0, 0
-
-local hideFloodMsg = new.bool(true)   -- фильтр "Не флуди"
+local hideFloodMsg = new.bool(true)
 local autoStartEnabled = new.bool(false)
 local afkExitTime = 0
 local afkCooldown = 30
 
--- Ник (просто заглушка)
 local my_nick_utf8 = "Игрок"
 
--- Флаг смены клавиши
 local changingKey = false
 
 -- Загрузка INI
 local ini = inicfg.load({
     main = {
         keyBind = "0x5A", keyBindName = 'Z', otInterval = 1000,
-        theme = 0, transparency = 0.9, autoStartEnabled = false, otklflud = false,
+        theme = 0, transparency = 0.9, autoStartEnabled = false, otklflud = true,
     },
-    widget = { posX = 400, posY = 400, sizeX = 500, sizeY = 350 }
+    window = { posX = 400, posY = 400, sizeX = 500, sizeY = 350 }
 }, IniFilename)
 
 keyBind = tonumber(ini.main.keyBind)
@@ -122,11 +112,9 @@ local function applyTheme(themeIndex)
 end
 applyTheme(currentTheme[0])
 
--- Функции для отправки сообщений
 local function sendToChat(msg) sampAddChatMessage(toCP1251(msg), -1) end
-function show_arz_notify() end -- заглушка
 
--- Автообновление (упрощённое, без сложных корутин)
+-- Автообновление
 function checkUpdates()
     update_status = "Проверка..."
     local path = getWorkingDirectory() .. '\\repflow_upd.json'
@@ -142,7 +130,7 @@ function checkUpdates()
                     if info.version ~= scriptver then
                         update_status = "Доступна: " .. info.version
                         update_found = true
-                        sendToChat("{1E90FF} [RepFlow]: {00FF00}Найдено обновление! Версия " .. info.version)
+                        sendToChat("{1E90FF} [!repflow]: {00FF00}Найдено обновление! Версия " .. info.version)
                     else
                         update_status = "У вас последняя версия."
                         update_found = false
@@ -158,7 +146,7 @@ function updateScript()
     local scriptPath = thisScript().path
     downloadUrlToFile(SCRIPT_URL, scriptPath, function(id, status, p1, p2)
         if status == 58 then
-            sendToChat("{1E90FF} [RepFlow]: {00FF00}Скрипт обновлен! Перезагрузка...")
+            sendToChat("{1E90FF} [!repflow]: {00FF00}Скрипт обновлен! Перезагрузка...")
             thisScript():reload()
         elseif status == 60 then update_status = "Ошибка загрузки" end
     end)
@@ -171,7 +159,7 @@ function filterFloodMessage(text)
         local clean = utf8_text:gsub("{%x+}", ""):gsub("#%x+", "")
         clean = clean:gsub("[%p%c]", " "):gsub("%s+", " "):match("^%s*(.-)%s*$")
         clean = utf8_lower(clean)
-        local ban = { utf8_lower("не флуди"), utf8_lower("не флуд"), utf8_lower("сейчас нет вопросов в репорт") }
+        local ban = { utf8_lower("не флуди"), utf8_lower("не флуд") }
         for _, phrase in ipairs(ban) do
             if clean:find(phrase, 1, true) then return false end
         end
@@ -179,14 +167,12 @@ function filterFloodMessage(text)
     return true
 end
 
--- Переключение активности
 function onToggleActive()
     active = not active
     if active then startTime = os.clock() else afkExitTime = os.clock() end
-    sendToChat("{1E90FF} [RepFlow]: {FFFFFF}Ловля " .. (active and "{00FF00}включена" or "{FF0000}выключена"))
+    sendToChat("{1E90FF} [!repflow]: {FFFFFF}Флудер " .. (active and "{00FF00}включен" or "{FF0000}выключен"))
 end
 
--- Сохранение настроек
 function saveSettings()
     ini.main.otInterval = otInterval[0]
     ini.main.autoStartEnabled = autoStartEnabled[0]
@@ -198,7 +184,7 @@ function saveSettings()
     inicfg.save(ini, IniFilename)
 end
 
--- Отрисовка вкладок
+-- Вкладки
 function drawMainTab()
     imgui.Text("[G] Настройки флудера")
     imgui.Separator()
@@ -212,17 +198,17 @@ function drawMainTab()
         imgui.InputText("##interval", otIntervalBuffer, ffi.sizeof(otIntervalBuffer))
         imgui.SameLine()
         if imgui.Button("Сохранить", imgui.ImVec2(100,28)) then
-            local new = tonumber(ffi.string(otIntervalBuffer))
-            if new and new > 0 then
-                otInterval[0] = new
+            local newVal = tonumber(ffi.string(otIntervalBuffer))
+            if newVal and newVal > 0 then
+                otInterval[0] = newVal
                 saveSettings()
-                sendToChat("{1E90FF} [RepFlow]: {00FF00}Интервал сохранён: " .. new .. " мс")
-            else sendToChat("{1E90FF} [RepFlow]: {FF0000}Некорректное значение") end
+                sendToChat("{1E90FF} [!repflow]: {00FF00}Интервал сохранён: " .. newVal .. " мс")
+            else sendToChat("{1E90FF} [!repflow]: {FF0000}Некорректное значение") end
         end
         imgui.PopItemWidth()
         imgui.Text("Текущий: " .. otInterval[0] .. " мс")
         imgui.Dummy(imgui.ImVec2(0,5))
-        imgui.Text("Всего отвечено: " .. reportAnsweredCount)
+        imgui.Text("Время работы: " .. string.format("%.1f сек", os.clock() - startTime))
     end
     imgui.EndChild()
     imgui.PopStyleColor()
@@ -237,7 +223,7 @@ function drawSettingsTab()
         imgui.SameLine()
         if imgui.Button(keyBindName, imgui.ImVec2(50,25)) then
             changingKey = true
-            sendToChat("{1E90FF} [RepFlow]: Нажмите новую клавишу...")
+            sendToChat("{1E90FF} [!repflow]: Нажмите новую клавишу...")
         end
         imgui.Checkbox("Автостарт по бездействию", autoStartEnabled)
         imgui.Checkbox("Скрывать 'Не флуди'", hideFloodMsg)
@@ -258,9 +244,9 @@ function drawInfoTab()
     imgui.Separator()
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
     if imgui.BeginChild("Info", imgui.ImVec2(0,150), true) then
-        imgui.Text("Автор: Balenciaga_Collins[18]")
+        imgui.Text("Автор: Ваше имя")
         imgui.Text("Версия: " .. scriptver)
-        imgui.Text("Telegram: @Repflowarizona")
+        imgui.Text("Telegram: @yourchannel")
         imgui.Dummy(imgui.ImVec2(0,5))
         imgui.Text("Обновления:")
         imgui.Text(update_status)
@@ -269,15 +255,13 @@ function drawInfoTab()
             imgui.SameLine()
             if imgui.Button("Установить", imgui.ImVec2(100,25)) then updateScript() end
         end
-        imgui.Dummy(imgui.ImVec2(0,5))
-        imgui.Text("Тестеры: Arman_Carukjan, Sora_Deathmarried")
     end
     imgui.EndChild()
     imgui.PopStyleColor()
 end
 
 function drawChangelogTab()
-    imgui.Text("[C] ChangeLog")
+    imgui.Text("[C] История обновлений")
     imgui.Separator()
     imgui.PushStyleColor(imgui.Col.ChildBg, colors.childPanelColor)
     if imgui.BeginChild("Changelog", imgui.ImVec2(0,200), true) then
@@ -293,17 +277,28 @@ function drawChangelogTab()
     imgui.PopStyleColor()
 end
 
--- Основной цикл
+-- Анимация появления (плавное изменение прозрачности)
+local windowAlpha = new.float(0.0)
+local function animateWindow(state)
+    local targetAlpha = state and 1.0 or 0.0
+    windowAlpha[0] = windowAlpha[0] + (targetAlpha - windowAlpha[0]) * 0.1
+    if math.abs(targetAlpha - windowAlpha[0]) < 0.01 then
+        windowAlpha[0] = targetAlpha
+    end
+    return windowAlpha[0]
+end
+
+-- Основной поток
 function main()
     if not isSampLoaded() or not isSampfuncsLoaded() then return end
     while not isSampAvailable() do wait(100) end
 
-    sampRegisterChatCommand("arep", function()
+    sampRegisterChatCommand("cho", function()
         main_window_state[0] = not main_window_state[0]
         if main_window_state[0] then sampToggleCursor(true) else sampToggleCursor(false) end
     end)
 
-    sendToChat("{1E90FF} [RepFlow]: {FFFFFF}Скрипт загружен. Меню: {00FF00}/arep")
+    sendToChat("{1E90FF} [!repflow]: {FFFFFF}Скрипт загружен. Меню: {00FF00}/cho")
     checkUpdates()
 
     local prev_main_state = false
@@ -311,59 +306,27 @@ function main()
     while true do
         wait(0)
 
-        -- Автостарт (упрощённо)
         if autoStartEnabled[0] and not active and (os.clock() - afkExitTime > afkCooldown) then
             active = true
             startTime = os.clock()
-            sendToChat("{1E90FF} [RepFlow]: Автостарт")
+            sendToChat("{1E90FF} [!repflow]: Автостарт")
         end
 
-        -- Управление окнами
-        if (main_window_state[0] or info_window_state[0]) and not isPauseMenuActive() then
+        if main_window_state[0] and not isPauseMenuActive() then
             imgui.Process = true
         else
             imgui.Process = false
         end
 
-        -- Сброс ввода при закрытии главного окна
         if main_window_state[0] ~= prev_main_state then
             if main_window_state[0] then sampToggleCursor(true) else sampToggleCursor(false) end
             prev_main_state = main_window_state[0]
         end
 
-        -- Активация по клавише
         if not changingKey and isKeyJustPressed(keyBind) and not sampIsChatInputActive() and not sampIsDialogActive() then
             onToggleActive()
         end
 
-        -- Информационное окно
-        info_window_state[0] = active
-
-        -- Перемещение инфо-окна
-        if info_window_state[0] then
-            local alt = isKeyDown(vkeys.VK_MENU)
-            local mouse = imgui.GetIO().MouseDown[0]
-            local mx, my = getCursorPos()
-            if alt and mouse and not isDraggingInfo then
-                local winX, winY = ini.widget.posX, ini.widget.posY
-                if mx >= winX and mx <= winX+240 and my >= winY and my <= winY+30 then
-                    isDraggingInfo = true
-                    dragOffsetX = mx - winX
-                    dragOffsetY = my - winY
-                end
-            end
-            if isDraggingInfo then
-                if mouse then
-                    ini.widget.posX = mx - dragOffsetX
-                    ini.widget.posY = my - dragOffsetY
-                else
-                    isDraggingInfo = false
-                    inicfg.save(ini, IniFilename)
-                end
-            end
-        end
-
-        -- Ловля по таймеру
         if active then
             local current = os.clock() * 1000
             if current - lastOtTime >= otInterval[0] then
@@ -374,25 +337,10 @@ function main()
     end
 end
 
--- Обработка сообщений чата
+-- Фильтр сообщений (опционально)
 function sampev.onServerMessage(color, text)
-    if text:find('%[(%W+)%] от (%w+_%w+)%[(%d+)%]:') then
-        if active then sampSendChat('/ot') end
-    end
     return filterFloodMessage(text)
 end
-
--- Событие диалога (для репорта)
-function sampev.onShowDialog(dialogId, style, title, button1, button2, text)
-    if dialogId == 1334 then
-        reportAnsweredCount = reportAnsweredCount + 1
-        sendToChat("{1E90FF} [RepFlow]: {00FF00}Репорт принят! Всего: " .. reportAnsweredCount)
-        if active then active = false; afkExitTime = os.clock() end
-    end
-end
-
--- Команда (запасная)
-function cmd_arep(arg) main_window_state[0] = not main_window_state[0] end
 
 -- ImGui инициализация
 imgui.OnInitialize(function()
@@ -408,20 +356,25 @@ imgui.OnInitialize(function()
     style.ItemSpacing = imgui.ImVec2(12,10)
     style.ButtonTextAlign = imgui.ImVec2(0.5,0.5)
     style.WindowTitleAlign = imgui.ImVec2(0.5,0.5)
+    style.Alpha = 1.0
 end)
 
 -- Главное окно
 local lastWindowSize = nil
 imgui.OnFrame(function() return main_window_state[0] end, function()
-    imgui.SetNextWindowSize(imgui.ImVec2(ini.widget.sizeX, ini.widget.sizeY), imgui.Cond.FirstUseEver)
+    local alpha = animateWindow(main_window_state[0])
+    if alpha < 0.01 then return end
+
+    imgui.PushStyleVar(imgui.StyleVar.Alpha, alpha)
+    imgui.SetNextWindowSize(imgui.ImVec2(ini.window.sizeX, ini.window.sizeY), imgui.Cond.FirstUseEver)
     imgui.SetNextWindowPos(imgui.ImVec2(sw/2, sh/2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5,0.5))
     imgui.PushStyleColor(imgui.Col.WindowBg, colors.rightPanelColor)
 
-    if imgui.Begin("RepFlow | Premium", main_window_state, imgui.WindowFlags.NoCollapse) then
-        -- Левая панель
+    if imgui.Begin("!repflow", main_window_state, imgui.WindowFlags.NoCollapse) then
+        -- Левая панель с вкладками
         imgui.PushStyleColor(imgui.Col.ChildBg, colors.leftPanelColor)
         if imgui.BeginChild("left_panel", imgui.ImVec2(120,-1), false) then
-            local tabs = { "Флудер", "Настройки", "Информация", "ChangeLog" }
+            local tabs = { "Флудер", "Настройки", "Информация", "Обновления" }
             for i,name in ipairs(tabs) do
                 if i-1 == active_tab[0] then
                     imgui.PushStyleColor(imgui.Col.Button, colors.hoverColor)
@@ -450,32 +403,17 @@ imgui.OnFrame(function() return main_window_state[0] end, function()
 
         local winSize = imgui.GetWindowSize()
         if lastWindowSize and (lastWindowSize.x ~= winSize.x or lastWindowSize.y ~= winSize.y) then
-            ini.widget.sizeX = winSize.x; ini.widget.sizeY = winSize.y
+            ini.window.sizeX = winSize.x; ini.window.sizeY = winSize.y
             inicfg.save(ini, IniFilename)
         end
         lastWindowSize = imgui.ImVec2(winSize.x, winSize.y)
     end
     imgui.End()
     imgui.PopStyleColor()
+    imgui.PopStyleVar()
 end)
 
--- Информационное окно
-imgui.OnFrame(function() return info_window_state[0] end, function()
-    imgui.SetNextWindowSize(imgui.ImVec2(240, 130), imgui.Cond.FirstUseEver)
-    imgui.SetNextWindowPos(imgui.ImVec2(ini.widget.posX, ini.widget.posY), imgui.Cond.Always)
-
-    imgui.Begin("[i] RepFlow", info_window_state,
-                imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoInputs)
-
-    imgui.Text("Статус: " .. (active and "{00FF00}Активен" or "{FF0000}Неактивен"))
-    imgui.Text(string.format("Время: %.1f сек", os.clock() - startTime))
-    imgui.Text("Отвечено: " .. reportAnsweredCount)
-    imgui.Text("Ник: " .. my_nick_utf8)
-
-    imgui.End()
-end)
-
--- Обработчик смены клавиши
+-- Смена клавиши
 function onWindowMessage(msg, wparam, lparam)
     if changingKey then
         if msg == 0x100 or msg == 0x101 then
@@ -483,7 +421,7 @@ function onWindowMessage(msg, wparam, lparam)
             keyBindName = vkeys.id_to_name(keyBind)
             changingKey = false
             saveSettings()
-            sendToChat("{1E90FF} [RepFlow]: Новая клавиша: " .. keyBindName)
+            sendToChat("{1E90FF} [!repflow]: Новая клавиша: " .. keyBindName)
             return false
         end
     end
