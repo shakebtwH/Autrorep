@@ -5,7 +5,6 @@ local vkeys = require 'vkeys'
 local encoding = require 'encoding'
 local inicfg = require 'inicfg'
 local ffi = require 'ffi'
-local samp = require 'samp'  -- добавляем полный модуль samp
 
 -- Настройка кодировок
 encoding.default = 'CP1251'
@@ -25,12 +24,12 @@ local update_status = "Проверка не проводилась"
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.48 | Premium"
+local scriptver = "4.49 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.48 | Premium", description = "Полностью переработан скрипт: добавлен флудер /ot с настраиваемым интервалом в миллисекундах, красивый современный интерфейс, информационное окно, автообновление." },
+    { version = "4.49 | Premium", description = "Полностью переработан скрипт: добавлен флудер /ot с настраиваемым интервалом в миллисекундах, красивый современный интерфейс, информационное окно, автообновление." },
 }
 
 -- Функция приведения UTF-8 строки к нижнему регистру (для фильтра)
@@ -80,7 +79,7 @@ local afkCooldown = 30
 -- Ник
 local my_nick_utf8 = "Игрок"
 
--- Флаг смены клавиши (должен быть глобальным для доступа из функций)
+-- Флаг смены клавиши
 local changingKey = false
 
 -- Загрузка INI
@@ -129,7 +128,7 @@ applyTheme(currentTheme[0])
 
 -- Функции для отправки сообщений
 local function sendToChat(msg) sampAddChatMessage(toCP1251(msg), -1) end
-function show_arz_notify(type, title, text, time) end -- заглушка, можно реализовать позже
+function show_arz_notify(type, title, text, time) end -- заглушка
 
 -- Автообновление
 function checkUpdates()
@@ -171,7 +170,7 @@ end
 
 -- Получение ника игрока (исправлено)
 local function getPlayerName()
-    local name = samp and samp.get_current_player_name and samp.get_current_player_name()
+    local name = sampGetCurrentPlayerName()
     if name and name ~= "" then
         my_nick_utf8 = toUTF8(name)
     else
@@ -323,7 +322,6 @@ function main()
     checkUpdates()
 
     local prev_main_state = false
-    -- changingKey уже объявлена глобально, не переобъявляем local
 
     while true do
         wait(0)
