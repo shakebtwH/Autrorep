@@ -25,12 +25,12 @@ local update_status = "Проверка не проводилась"
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.47 | Premium"
+local scriptver = "4.48 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.47 | Premium", description = "Полностью переработан скрипт: добавлен флудер /ot с настраиваемым интервалом в миллисекундах, красивый современный интерфейс, информационное окно, автообновление." },
+    { version = "4.48 | Premium", description = "Полностью переработан скрипт: добавлен флудер /ot с настраиваемым интервалом в миллисекундах, красивый современный интерфейс, информационное окно, автообновление." },
 }
 
 -- Функция приведения UTF-8 строки к нижнему регистру (для фильтра)
@@ -79,6 +79,9 @@ local afkCooldown = 30
 
 -- Ник
 local my_nick_utf8 = "Игрок"
+
+-- Флаг смены клавиши (должен быть глобальным для доступа из функций)
+local changingKey = false
 
 -- Загрузка INI
 local ini = inicfg.load({
@@ -320,7 +323,7 @@ function main()
     checkUpdates()
 
     local prev_main_state = false
-    local changingKey = false
+    -- changingKey уже объявлена глобально, не переобъявляем local
 
     while true do
         wait(0)
@@ -405,7 +408,7 @@ function sampev.onShowDialog(dialogId, style, title, button1, button2, text)
     end
 end
 
--- Команда
+-- Команда (запасная)
 function cmd_arep(arg) main_window_state[0] = not main_window_state[0] end
 
 -- ImGui инициализация
@@ -425,6 +428,7 @@ imgui.OnInitialize(function()
 end)
 
 -- Главное окно
+local lastWindowSize = nil
 imgui.OnFrame(function() return main_window_state[0] end, function()
     imgui.SetNextWindowSize(imgui.ImVec2(ini.widget.sizeX, ini.widget.sizeY), imgui.Cond.FirstUseEver)
     imgui.SetNextWindowPos(imgui.ImVec2(sw/2, sh/2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5,0.5))
