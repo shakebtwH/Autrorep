@@ -1,7 +1,6 @@
 require 'lib.moonloader'
 local imgui = require 'mimgui'
 local sampev = require 'lib.samp.events'
-local vkeys = require 'vkeys'
 local encoding = require 'encoding'
 local inicfg = require 'inicfg'
 local ffi = require 'ffi'
@@ -26,40 +25,20 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.39 | Premium"
+local scriptver = "4.40 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.39 | Premium", description = "Скрипт временно закрыт. Ожидайте новостей от разработчика в Telegram." },
-    { version = "4.38 | Premium", description = "- Исправлено отображение текста и кнопок во вкладке 'Флудер': добавлен перенос строк, увеличена ширина поля ввода, кнопка теперь не обрезается.\n- Улучшено выравнивание элементов во всех вкладках." },
-    { version = "4.37 | Premium", description = "- Уменьшен размер главного окна до 680x420 для более компактного вида.\n- Увеличено информационное окно до 280 пикселей, текст теперь не выходит за границы.\n- Исправлено возможное смещение текста в окне информации (использован перенос строк).\n- Мелкие правки интерфейса для идеального выравнивания." },
-    { version = "4.36 | Premium", description = "- Интерфейс полностью переработан: увеличен размер окна до 750x480, левая панель 160px.\n- Исправлены все текстовые ошибки: 'Фулдер' → 'Флудер', 'Образовать диалоги' → 'Обрабатывать диалоги', кнопка '[F] Сохранить тайм-а!' → '[F] Сохранить тайм-аут'.\n- Увеличены размеры кнопок, чекбоксов, полей ввода – текст теперь нигде не обрезается.\n- Добавлены отступы для аккуратного выравнивания." },
-    { version = "4.35 | Premium", description = "- Увеличен размер интерфейса до 700x450, левая панель 150px.\n- Исправлено отображение элементов во вкладке 'Настройки'." },
-    { version = "4.34 | Premium", description = "- Уменьшен размер окна, добавлен тестер Sora_Deathmarried." },
-    { version = "4.33 | Premium", description = "- Автоматическая проверка обновлений при запуске скрипта." },
-    { version = "4.32 | Premium", description = "- Обновлён дизайн интерфейса: более современные цвета, скругления, отступы." },
-    { version = "4.31 | Premium", description = "- Исправлена работа фильтра 'Не флуди'." },
-    { version = "4.30 | Premium", description = "- Оптимизация кода, исправление ошибок." },
-    { version = "4.29 | Premium", description = "- Исправлена работа фильтра 'Не флуди' (теперь учитываются знаки препинания и разные окончания)." },
-    { version = "4.28 | Premium", description = "- Улучшен фильтр 'Не флуди' (удаление цветовых кодов {RRGGBB} и #AARRGGBB, поиск по ключевым словам)." },
-    { version = "4.27 | Premium", description = "- Улучшен фильтр 'Не флуди' (нижний регистр, удаление цветовых кодов)." },
-    { version = "4.26 | Premium", description = "- Исправлена ошибка 'show_arz_notify nil'." },
-    { version = "4.25 | Premium", description = "- Исправлена работа фильтра 'Не флуди'." },
-    { version = "4.24 | Premium", description = "- Исправлена ошибка 'encoding.CP1251 is nil'." },
-    { version = "4.23 | Premium", description = "- Исправлены кракозябры в чате." },
+    { version = "4.40 | Premium", description = "Скрипт временно закрыт. Информация теперь отображается в меню /arep." },
 }
 
--- Заглушка: все функции отключены
+-- Вспомогательная функция для отправки сообщений в чат (только для уведомлений об обновлении)
 local function sendToChat(msg)
     sampAddChatMessage(toCP1251(msg), -1)
 end
 
-function show_arz_notify(type, title, text, time)
-    -- Заглушка: ничего не делаем
-end
-
--- ФУНКЦИИ ОБНОВЛЕНИЯ (оставляем для возможности будущих обновлений)
+-- ФУНКЦИИ ОБНОВЛЕНИЯ
 function checkUpdates()
     update_status = "Проверка наличия обновлений..."
     local path = getWorkingDirectory() .. '\\repflow_upd.json'
@@ -105,40 +84,123 @@ function updateScript()
     end)
 end
 
--- ОСНОВНОЙ ЦИКЛ (только информационное сообщение)
+-- Переменные для управления окном
+local main_window_state = new.bool(false)
+local sw, sh = getScreenResolution()
+
+-- Цвета для окна (простая тёмная тема)
+local colors = {
+    bgColor = imgui.ImVec4(0.11, 0.12, 0.16, 1.0),
+    textColor = imgui.ImVec4(1, 1, 1, 1),
+    linkColor = imgui.ImVec4(0.25, 0.45, 0.85, 1.0),
+}
+
+-- Функция для рисования информационного окна
+function drawInfoWindow()
+    imgui.Text("Скрипт временно закрыт.")
+    imgui.Text("Ожидайте новостей от разработчика в Telegram.")
+    imgui.Separator()
+    
+    -- Кликабельная ссылка
+    local link = "https://t.me/Repflowarizona"
+    local text = "Открыть Telegram канал"
+    local tSize = imgui.CalcTextSize(text)
+    local p = imgui.GetCursorScreenPos()
+    local DL = imgui.GetWindowDrawList()
+    
+    if imgui.InvisibleButton("##telegram_link", tSize) then
+        os.execute('start ' .. link)  -- открыть ссылку в браузере
+    end
+    
+    local color = imgui.IsItemHovered() and 0xFFFFAA00 or 0xFF3F73D9
+    DL:AddText(p, color, text)
+    DL:AddLine(imgui.ImVec2(p.x, p.y + tSize.y), imgui.ImVec2(p.x + tSize.x, p.y + tSize.y), color)
+    
+    imgui.Dummy(imgui.ImVec2(0, 10)) -- отступ
+    if imgui.Button("Закрыть", imgui.ImVec2(200, 30)) then
+        main_window_state[0] = false
+        sampToggleCursor(false)
+    end
+end
+
+-- Основной цикл
 function main()
     if not isSampLoaded() or not isSampfuncsLoaded() then return end
     while not isSampAvailable() do wait(100) end
 
-    -- Приветственное сообщение о временном закрытии
-    sendToChat("{1E90FF} [RepFlow]: {FFFF00}Скрипт временно закрыт. Ожидайте новостей от разработчика в Telegram.")
-    sendToChat("{1E90FF} [RepFlow]: {FFFFFF}https://t.me/Repflowarizona")
-
-    -- Автоматическая проверка обновлений (оставляем)
-    checkUpdates()
-
-    -- Регистрируем команду, которая будет показывать то же сообщение
+    -- Регистрация команды /arep
     sampRegisterChatCommand("arep", function()
-        sendToChat("{1E90FF} [RepFlow]: {FFFF00}Скрипт временно закрыт. Ожидайте новостей от разработчика в Telegram.")
-        sendToChat("{1E90FF} [RepFlow]: {FFFFFF}https://t.me/Repflowarizona")
+        main_window_state[0] = not main_window_state[0]
+        if main_window_state[0] then
+            sampToggleCursor(true)
+        else
+            sampToggleCursor(false)
+        end
     end)
 
-    -- Бесконечный цикл без активной ловли
+    -- Приветственное сообщение в чат (один раз)
+    sendToChat("{1E90FF} [RepFlow]: {FFFF00}Скрипт временно закрыт. Меню: /arep")
+    checkUpdates()
+
+    -- Основной цикл (только для управления окном)
     while true do
-        wait(1000)
+        wait(0)
+
+        if main_window_state[0] and not isGameMinimized() then
+            imgui.Process = true
+        else
+            imgui.Process = false
+        end
+
+        -- Сброс ввода при закрытии окна (чтобы курсор не зависал)
+        if not main_window_state[0] then
+            -- Ничего не делаем, курсор уже отключён в команде
+        end
     end
 end
 
--- Все обработчики событий SAMP отключены (возвращаем true, чтобы сообщения проходили)
+-- Обработчики SAMP отключены (возвращаем true, чтобы сообщения проходили)
 function sampev.onServerMessage(color, text)
     return true
 end
 
 function sampev.onShowDialog(dialogId, style, title, button1, button2, text)
-    -- Ничего не делаем
+    -- ничего не делаем
 end
 
--- Функция для окон imgui не используется, но оставим пустые обработчики, чтобы не было ошибок
-imgui.OnInitialize(function() end)
+-- Настройка imgui
+imgui.OnInitialize(function()
+    imgui.GetIO().IniFilename = nil
+    imgui.GetIO().Fonts:AddFontDefault()
+    decor()
+end)
 
-imgui.OnFrame(function() return false end, function() end)
+function decor()
+    imgui.SwitchContext()
+    local style = imgui.GetStyle()
+    style.WindowPadding = imgui.ImVec2(20, 20)
+    style.WindowRounding = 12.0
+    style.WindowBorderSize = 0.0
+    style.FramePadding = imgui.ImVec2(10, 8)
+    style.FrameRounding = 8.0
+    style.ItemSpacing = imgui.ImVec2(12, 12)
+    style.ButtonTextAlign = imgui.ImVec2(0.5, 0.5)
+    style.WindowTitleAlign = imgui.ImVec2(0.5, 0.5)
+end
+
+imgui.OnFrame(function() return main_window_state[0] end, function()
+    imgui.SetNextWindowSize(imgui.ImVec2(350, 200), imgui.Cond.FirstUseEver)
+    imgui.SetNextWindowPos(imgui.ImVec2(sw/2, sh/2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5,0.5))
+    imgui.PushStyleColor(imgui.Col.WindowBg, colors.bgColor)
+
+    if imgui.Begin("RepFlow | Premium", main_window_state, imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoResize) then
+        drawInfoWindow()
+    end
+    imgui.End()
+    imgui.PopStyleColor()
+end)
+
+-- Обработчик оконных сообщений (не используется, но оставлен для совместимости)
+function onWindowMessage(msg, wparam, lparam)
+    return false
+end
