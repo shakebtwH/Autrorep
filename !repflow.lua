@@ -25,13 +25,12 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.42 | Premium"
+local scriptver = "4.43 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.42 | Premium", description = "Убран разделитель, уменьшен размер окна." },
-    { version = "4.39 | Premium", description = "Скрипт временно закрыт. Информация теперь отображается в меню /arep." },
+    { version = "4.43 | Premium", description = "Скрипт временно закрыт. Информация теперь отображается в меню /arep." },
 }
 
 -- Вспомогательная функция для отправки сообщений в чат (только для уведомлений об обновлении)
@@ -100,7 +99,7 @@ local colors = {
 function drawInfoWindow()
     imgui.Text("Скрипт временно закрыт.")
     imgui.Text("Ожидайте новостей от разработчика в Telegram.")
-    -- Убрана строка с разделителем
+    imgui.Separator()
     
     -- Кликабельная ссылка
     local link = "https://t.me/Repflowarizona"
@@ -186,8 +185,7 @@ function decor()
 end
 
 imgui.OnFrame(function() return main_window_state[0] end, function()
-    -- Уменьшен размер окна до 300x150
-    imgui.SetNextWindowSize(imgui.ImVec2(300, 150), imgui.Cond.FirstUseEver)
+    imgui.SetNextWindowSize(imgui.ImVec2(350, 200), imgui.Cond.FirstUseEver)
     imgui.SetNextWindowPos(imgui.ImVec2(sw/2, sh/2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5,0.5))
     imgui.PushStyleColor(imgui.Col.WindowBg, colors.bgColor)
 
