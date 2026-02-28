@@ -26,12 +26,12 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.38 | Premium"
+local scriptver = "4.39 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.38 | Premium", description = "- Исправлено отображение текста и кнопок во вкладке 'Флудер': добавлен перенос строк, увеличена ширина поля ввода, кнопка теперь не обрезается.\n- Улучшено выравнивание элементов во всех вкладках." },
+    { version = "4.39 | Premium", description = "- Исправлено отображение текста и кнопок во вкладке 'Флудер': добавлен перенос строк, увеличена ширина поля ввода, кнопка теперь не обрезается.\n- Улучшено выравнивание элементов во всех вкладках." },
     { version = "4.37 | Premium", description = "- Уменьшен размер главного окна до 680x420 для более компактного вида.\n- Увеличено информационное окно до 280 пикселей, текст теперь не выходит за границы.\n- Исправлено возможное смещение текста в окне информации (использован перенос строк).\n- Мелкие правки интерфейса для идеального выравнивания." },
     { version = "4.36 | Premium", description = "- Интерфейс полностью переработан: увеличен размер окна до 750x480, левая панель 160px.\n- Исправлены все текстовые ошибки: 'Фулдер' → 'Флудер', 'Образовать диалоги' → 'Обрабатывать диалоги', кнопка '[F] Сохранить тайм-а!' → '[F] Сохранить тайм-аут'.\n- Увеличены размеры кнопок, чекбоксов, полей ввода – текст теперь нигде не обрезается.\n- Добавлены отступы для аккуратного выравнивания." },
     { version = "4.35 | Premium", description = "- Увеличен размер интерфейса до 700x450, левая панель 150px.\n- Исправлено отображение элементов во вкладке 'Настройки'." },
@@ -824,93 +824,99 @@ function decor()
 end
 
 imgui.OnFrame(function() return main_window_state[0] end, function()
-    imgui.SetNextWindowSize(imgui.ImVec2(ini.widget.sizeX, ini.widget.sizeY), imgui.Cond.FirstUseEver)
+
+    imgui.SetNextWindowSize(imgui.ImVec2(750, 480), imgui.Cond.FirstUseEver)
     imgui.SetNextWindowPos(imgui.ImVec2(sw/2, sh/2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5,0.5))
-    imgui.PushStyleColor(imgui.Col.WindowBg, colors.rightPanelColor)
 
-    if imgui.Begin("[R] RepFlow | Premium", main_window_state, imgui.WindowFlags.NoCollapse) then
+    if imgui.Begin("RepFlow | Premium", main_window_state, imgui.WindowFlags.NoCollapse) then
 
-        imgui.PushStyleColor(imgui.Col.ChildBg, colors.leftPanelColor)
-        if imgui.BeginChild("left_panel", imgui.ImVec2(150, -1), false) then
-            local tabNames = { "Флудер", "Настройки", "Информация", "ChangeLog", "Темы", "Обновления" }
-            for i, name in ipairs(tabNames) do
-                if i-1 == active_tab[0] then
-                    imgui.PushStyleColor(imgui.Col.Button, colors.hoverColor)
-                else
-                    imgui.PushStyleColor(imgui.Col.Button, colors.leftPanelColor)
-                end
-                imgui.PushStyleColor(imgui.Col.ButtonHovered, colors.hoverColor)
-                imgui.PushStyleColor(imgui.Col.ButtonActive, colors.hoverColor)
+        local fullWidth = imgui.GetWindowWidth()
+        local fullHeight = imgui.GetWindowHeight()
 
-                if imgui.Button(name, imgui.ImVec2(140, 42)) then
-                    active_tab[0] = i-1
-                end
-                imgui.PopStyleColor(3)
+        local sidebarWidth = 180
+
+        -- Левая панель
+        imgui.BeginChild("sidebar", imgui.ImVec2(sidebarWidth, fullHeight - 60), true)
+
+        local tabNames = { "Флудер", "Настройки", "Информация", "ChangeLog", "Темы", "Обновления" }
+
+        for i, name in ipairs(tabNames) do
+            if i-1 == active_tab[0] then
+                imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.25,0.45,0.85,0.8))
+            end
+
+            if imgui.Button(name, imgui.ImVec2(-1, 45)) then
+                active_tab[0] = i-1
+            end
+
+            if i-1 == active_tab[0] then
+                imgui.PopStyleColor()
             end
         end
+
         imgui.EndChild()
-        imgui.PopStyleColor()
 
         imgui.SameLine()
-        imgui.PushStyleColor(imgui.Col.ChildBg, colors.rightPanelColor)
-        if imgui.BeginChild("right_panel", imgui.ImVec2(-1, 0), false) then
-            if active_tab[0] == 0 then drawMainTab()
-            elseif active_tab[0] == 1 then drawSettingsTab()
-            elseif active_tab[0] == 2 then drawInfoTab(colors.rightPanelColor)
-            elseif active_tab[0] == 3 then drawChangeLogTab()
-            elseif active_tab[0] == 4 then drawThemesTab()
-            elseif active_tab[0] == 5 then drawUpdatesTab() end
-        end
-        imgui.EndChild()
-        imgui.PopStyleColor()
 
-        local winSize = imgui.GetWindowSize()
-        if lastWindowSize == nil then
-            lastWindowSize = imgui.ImVec2(winSize.x, winSize.y)
-        elseif lastWindowSize.x ~= winSize.x or lastWindowSize.y ~= winSize.y then
-            lastWindowSize = imgui.ImVec2(winSize.x, winSize.y)
-            ini.widget.sizeX = winSize.x
-            ini.widget.sizeY = winSize.y
-            inicfg.save(ini, IniFilename)
+        -- Правая панель
+        imgui.BeginChild("content", imgui.ImVec2(0, fullHeight - 60), true)
+
+        imgui.PushTextWrapPos(imgui.GetContentRegionAvailWidth())
+
+        if active_tab[0] == 0 then
+            drawMainTab()
+        elseif active_tab[0] == 1 then
+            drawSettingsTab()
+        elseif active_tab[0] == 2 then
+            drawInfoTab()
+        elseif active_tab[0] == 3 then
+            drawChangeLogTab()
+        elseif active_tab[0] == 4 then
+            drawThemesTab()
+        elseif active_tab[0] == 5 then
+            drawUpdatesTab()
         end
+
+        imgui.PopTextWrapPos()
+
+        imgui.EndChild()
+
     end
+
     imgui.End()
-    imgui.PopStyleColor()
+
 end)
 
 -- Окно информации (увеличенное, с переносом текста)
 imgui.OnFrame(function() return info_window_state[0] end, function(self)
-    self.HideCursor = true
-    local windowWidth = 280
-    local windowHeight = active and 140 or 300
+
+    local windowWidth = 300
+    local windowHeight = active and 150 or 320
+
     imgui.SetNextWindowSize(imgui.ImVec2(windowWidth, windowHeight), imgui.Cond.FirstUseEver)
     imgui.SetNextWindowPos(imgui.ImVec2(ini.widget.posX, ini.widget.posY), imgui.Cond.Always)
 
-    imgui.Begin("[i] Информация ", info_window_state, 
-                imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoInputs)
+    imgui.Begin("Информация", info_window_state,
+        imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoInputs)
 
-    imgui.PushTextWrapPos(260)
-    imgui.CenterText("Статус Ловли: " .. (active and "Включена" or "Выключена"))
-    local elapsedTime = os.clock() - startTime
-    imgui.CenterText(string.format("Время работы: %.2f сек", elapsedTime))
-    imgui.CenterText(string.format("Отвечено репорта: %d", reportAnsweredCount))
+    imgui.PushTextWrapPos(windowWidth - 20)
+
+    imgui.Text("Статус: " .. (active and "Включена" or "Выключена"))
+    imgui.Text("Отвечено репортов: " .. reportAnsweredCount)
+    imgui.Text("Скрипт активен: " .. formatTime(os.clock() - scriptStartTime))
 
     if not active then
         imgui.Separator()
-        imgui.Text("Обработка диалогов:")
-        imgui.SameLine()
-        imgui.Text(dialogHandlerEnabled[0] and "Включена" or "Выкл.")
-        imgui.Text("Автостарт:")
-        imgui.SameLine()
-        imgui.Text(autoStartEnabled[0] and "Включен" or "Выключен")
-        imgui.Separator()
-        imgui.TextDisabled("Перемещение: Alt + ЛКМ по заголовку")
-        imgui.Text("Скрипт активен: " .. formatTime(os.clock() - scriptStartTime))
+        imgui.Text("Автостарт: " .. (autoStartEnabled[0] and "Включен" or "Выключен"))
+        imgui.Text("Диалоги: " .. (dialogHandlerEnabled[0] and "Включены" or "Выключены"))
         imgui.Text("Ваш ник: " .. my_nick_utf8)
+        imgui.TextDisabled("Alt + ЛКМ — перемещение")
     end
+
     imgui.PopTextWrapPos()
 
     imgui.End()
+
 end)
 
 function onWindowMessage(msg, wparam, lparam)
