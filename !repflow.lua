@@ -25,12 +25,12 @@ if not samp then samp = {} end
 
 local IniFilename = 'RepFlowCFG.ini'
 local new = imgui.new
-local scriptver = "4.40 | Premium"
+local scriptver = "4.41 | Premium"
 
 local scriptStartTime = os.clock()
 
 local changelogEntries = {
-    { version = "4.40 | Premium", description = "Скрипт временно закрыт. Информация теперь отображается в меню /arep." },
+    { version = "4.41 | Premium", description = "Скрипт временно закрыт. Информация теперь отображается в меню /arep." },
 }
 
 -- Вспомогательная функция для отправки сообщений в чат (только для уведомлений об обновлении)
@@ -142,19 +142,15 @@ function main()
     sendToChat("{1E90FF} [RepFlow]: {FFFF00}Скрипт временно закрыт. Меню: /arep")
     checkUpdates()
 
-    -- Основной цикл (только для управления окном)
+    -- Основной цикл
     while true do
         wait(0)
 
-        if main_window_state[0] and not isGameMinimized() then
+        -- Управление отрисовкой imgui: окно рисуется только когда оно открыто и игра не на паузе
+        if main_window_state[0] and not isPauseMenuActive() then
             imgui.Process = true
         else
             imgui.Process = false
-        end
-
-        -- Сброс ввода при закрытии окна (чтобы курсор не зависал)
-        if not main_window_state[0] then
-            -- Ничего не делаем, курсор уже отключён в команде
         end
     end
 end
